@@ -1,0 +1,131 @@
+{
+  "name": "@arki/queue",
+  "version": "0.3.0",
+  "description": "Typed background jobs for TypeScript: BullMQ on Redis, pg-boss on PGlite, or a database row that commits with your transaction.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arki-labs/arki.git"
+  },
+  "homepage": "https://arki.dev",
+  "bugs": {
+    "url": "https://github.com/arki-labs/arki/issues"
+  },
+  "keywords": [
+    "arki",
+    "typescript",
+    "queue",
+    "jobs",
+    "background-jobs",
+    "bullmq",
+    "pg-boss",
+    "outbox"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js",
+      "default": "./dist/types/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js",
+      "default": "./dist/errors.js"
+    },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js",
+      "default": "./dist/contract.js"
+    },
+    "./runtime-local": {
+      "types": "./dist/runtime-local/index.d.ts",
+      "import": "./dist/runtime-local/index.js",
+      "default": "./dist/runtime-local/index.js"
+    },
+    "./dot": {
+      "types": "./dist/dot.d.ts",
+      "import": "./dist/dot.js",
+      "default": "./dist/dot.js"
+    },
+    "./outbox": {
+      "types": "./dist/outbox/index.d.ts",
+      "import": "./dist/outbox/index.js",
+      "default": "./dist/outbox/index.js"
+    },
+    "./projection": {
+      "types": "./dist/projection.d.ts",
+      "import": "./dist/projection.js",
+      "default": "./dist/projection.js"
+    },
+    "./foreman": {
+      "types": "./dist/foreman/index.d.ts",
+      "import": "./dist/foreman/index.js",
+      "default": "./dist/foreman/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**",
+    "src/**",
+    "!src/**/*.test.*",
+    "!src/**/*.spec.*",
+    "!src/**/*.fixture.*",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "docs/agent-guide.md",
+    "docs/recipes/**",
+    "docs/reference/**",
+    "docs/upgrades/**",
+    "LICENSE",
+    "package.json"
+  ],
+  "dependencies": {
+    "@arki/async": "0.3.0",
+    "@arki/contracts": "0.4.1",
+    "@arki/failure": "0.3.0",
+    "@arki/journal": "0.4.1",
+    "@arki/log": "0.4.0",
+    "@arki/resilience": "0.3.2",
+    "@arki/schedule": "0.1.1",
+    "@arki/schema": "0.3.0",
+    "@bull-board/api": "^6.21.3",
+    "@bull-board/hono": "^6.21.3",
+    "@electric-sql/pglite": "^0.4.6",
+    "@opentelemetry/api": "^1.9.1",
+    "bullmq": "^6.3.11",
+    "drizzle-orm": "1.0.0-rc.4",
+    "hono": "^4.13.13",
+    "ioredis": "^5.11.1",
+    "pg-boss": "12.37.0",
+    "superjson": "latest",
+    "uuid": "^14.0.2",
+    "zod": "4.6.5"
+  },
+  "peerDependencies": {
+    "@arki/admin": "^0.3.0",
+    "@arki/dot": "^0.10.0"
+  },
+  "peerDependenciesMeta": {
+    "@arki/admin": {
+      "optional": true
+    },
+    "@arki/dot": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

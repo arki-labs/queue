@@ -1,0 +1,214 @@
+/**
+ * Flow builder implementation
+ * Provides chainable API for creating multi-step workflows
+ *
+ * Flows define multi-step workflows where steps can depend on each other:
+ * - Each step runs a job with data derived from flow input
+ * - Steps can specify dependencies (must run after other steps complete)
+ * - The steps form a tree (a BullMQ flow): each step is in the `dependsOn`
+ *   of at most one other step. A parent step runs after all its children.
+ * - Each step runs in its own job's worker, with that job's middleware (a flow has no `.use()`)
+ *
+ * @example
+ * ```typescript
+ * const orderFlow = q.flow
+ *   .name('orders.process')
+ *   .input(z.object({ orderId: z.string() }))
+ *   .step('validate', {
+ *     job: validateJob,
+ *     data: input => ({ orderId: input.orderId }),
+ *   })
+ *   .step('payment', {
+ *     job: paymentJob,
+ *     data: input => ({ orderId: input.orderId }),
+ *     dependsOn: ['validate'],
+ *   })
+ *   .build();
+ * ```
+ */
+import { debugBuilder, observeQueue } from './debug.js';
+import { QUEUE_DEFINITION_ERROR_CODES, QueueDefinitionError } from './errors.js';
+/**
+ * Validate flow dependencies
+ * Ensures all step dependencies reference valid step IDs
+ * @internal
+ */
+function validateFlowDependencies(steps) {
+    observeQueue(() => debugBuilder.debug('Validating flow dependencies for {stepsLength} steps', { stepsLength: steps.length }));
+    const stepIds = new Set(steps.map(step => step.id));
+    for (const step of steps) {
+        if (!step.dependsOn)
+            continue;
+        observeQueue(() => debugBuilder.debug('[{stepId}] Validating dependencies: {dependencies}', {
+            stepId: step.id,
+            dependencies: step.dependsOn?.join(', '),
+        }));
+        for (const dependency of step.dependsOn) {
+            if (!stepIds.has(dependency)) {
+                observeQueue(() => debugBuilder.debug('[{stepId}] Invalid dependency detected: {detected}', {
+                    stepId: step.id,
+                    detected: dependency,
+                }));
+                throw new QueueDefinitionError({
+                    code: QUEUE_DEFINITION_ERROR_CODES.unknownStepDependency,
+                    message: `Step "${step.id}" depends on "${dependency}", but no step with that ID exists. ` +
+                        `Available step IDs: ${[...stepIds].join(', ')}`,
+                    remediation: 'Fix the id in dependsOn, or add the missing .step() to the flow.',
+                });
+            }
+        }
+    }
+    // Check for circular dependencies
+    detectCircularDependencies(steps);
+    rejectFanOut(steps);
+    observeQueue(() => debugBuilder.debug('Flow dependencies validated successfully'));
+}
+/**
+ * Detect circular dependencies in flow steps
+ * @internal
+ */
+function detectCircularDependencies(steps) {
+    observeQueue(() => debugBuilder.debug('Checking for circular dependencies in flow'));
+    const graph = new Map();
+    // Build dependency graph
+    for (const step of steps) {
+        graph.set(step.id, new Set(step.dependsOn));
+    }
+    // Detect cycles using DFS
+    const visited = new Set();
+    const recursionStack = new Set();
+    function hasCycle(stepId) {
+        visited.add(stepId);
+        recursionStack.add(stepId);
+        const dependencies = graph.get(stepId) ?? new Set();
+        for (const dep of dependencies) {
+            if (!visited.has(dep)) {
+                if (hasCycle(dep))
+                    return true;
+            }
+            else if (recursionStack.has(dep)) {
+                observeQueue(() => debugBuilder.debug('Circular dependency detected: {detected} -> {dep}', { detected: stepId, dep }));
+                return true;
+            }
+        }
+        recursionStack.delete(stepId);
+        return false;
+    }
+    for (const step of steps) {
+        if (!visited.has(step.id) && hasCycle(step.id)) {
+            throw new QueueDefinitionError({
+                code: QUEUE_DEFINITION_ERROR_CODES.circularStepDependency,
+                message: `Circular dependency detected in flow steps starting from step "${step.id}"`,
+                remediation: 'Remove one dependsOn entry so the steps form a chain with no loop.',
+            });
+        }
+    }
+    observeQueue(() => debugBuilder.debug('No circular dependencies found'));
+}
+/**
+ * BullMQ flows are trees: a child job has exactly one parent. A step in the
+ * `dependsOn` of two steps would have two parents, so it could not run once
+ * for both. Reject that here instead of running the step twice (or never).
+ * @internal
+ */
+function rejectFanOut(steps) {
+    const dependentOf = new Map();
+    for (const step of steps) {
+        for (const dependency of new Set(step.dependsOn)) {
+            const other = dependentOf.get(dependency);
+            if (other !== undefined) {
+                throw new QueueDefinitionError({
+                    code: QUEUE_DEFINITION_ERROR_CODES.stepWithManyDependents,
+                    message: `Step "${dependency}" is in the dependsOn of both "${other}" and "${step.id}". ` +
+                        'A flow is a BullMQ tree: each step can be waited on by at most one other step.',
+                    remediation: `Chain the steps instead (make "${step.id}" depend on "${other}" rather than on "${dependency}"), ` +
+                        'or split them into two flows.',
+                });
+            }
+            dependentOf.set(dependency, step.id);
+        }
+    }
+}
+/**
+ * Create a flow builder start (after name is set)
+ * @internal
+ */
+export function createFlowBuilder(name, config) {
+    observeQueue(() => debugBuilder.debug('[{name}] Creating flow builder', { name }));
+    return {
+        input(schema) {
+            observeQueue(() => debugBuilder.debug('[{name}] Setting input schema for flow', { name }));
+            // One runtime object serves both typestates: the FlowBuilderNeedsStep
+            // type hides `.build()` until the first `.step()`; the throw below backs it up.
+            return createFlowBuilderWithInput({
+                config,
+                name,
+                inputSchema: schema,
+                steps: [],
+            });
+        },
+    };
+}
+/**
+ * Create a flow builder with input
+ * @internal
+ */
+function createFlowBuilderWithInput(state) {
+    return {
+        step(id, config) {
+            observeQueue(() => debugBuilder.debug('[{stateName}] Adding step "{id}" (job: {job}, dependencies: {dependencies})', {
+                stateName: state.name,
+                id,
+                job: config.job._internal.name,
+                dependencies: config.dependsOn?.join(', ') ?? 'none',
+            }));
+            // The mapper declares job input. Submission validates its result before opening Redis;
+            // business refusals belong to the step handler and its shared execution boundary.
+            const newStep = {
+                id,
+                job: config.job,
+                data: config.data,
+                opts: config.opts,
+                dependsOn: config.dependsOn,
+            };
+            return createFlowBuilderWithInput({
+                ...state,
+                steps: [...state.steps, newStep],
+            });
+        },
+        build() {
+            if (!state.inputSchema) {
+                throw new QueueDefinitionError({
+                    code: QUEUE_DEFINITION_ERROR_CODES.missingInput,
+                    message: 'Input schema is required. Call .input() first.',
+                    remediation: 'Add .input(schema) right after q.flow.name(...).',
+                });
+            }
+            if (state.steps.length === 0) {
+                throw new QueueDefinitionError({
+                    code: QUEUE_DEFINITION_ERROR_CODES.missingSteps,
+                    message: 'At least one step is required. Call .step() before .build().',
+                    remediation: 'Add at least one .step(id, { job, data }) before .build().',
+                });
+            }
+            observeQueue(() => debugBuilder.debug('[{stateName}] Building flow definition with {stepsLength} steps', {
+                stateName: state.name,
+                stepsLength: state.steps.length,
+            }));
+            // Validate step dependencies
+            validateFlowDependencies(state.steps);
+            const internal = {
+                name: state.name,
+                inputSchema: state.inputSchema,
+                steps: state.steps,
+                config: state.config,
+            };
+            observeQueue(() => debugBuilder.debug('[{stateName}] Flow definition built successfully', { stateName: state.name }));
+            return {
+                _type: 'flow',
+                _internal: internal,
+            };
+        },
+    };
+}
+//# sourceMappingURL=flow-builder.js.map

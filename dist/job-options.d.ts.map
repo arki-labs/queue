@@ -1,0 +1,1 @@
+{"version":3,"file":"job-options.d.ts","sourceRoot":"","sources":["../src/job-options.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AAEH,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,QAAQ,CAAC;AAEhD,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,gBAAgB,CAAC;AAGjD,wBAAgB,iBAAiB,CAAC,OAAO,EAAE,UAAU,GAAG,SAAS,GAAG,iBAAiB,CAKpF;AAED,oGAAoG;AACpG,wBAAgB,eAAe,CAAC,OAAO,EAAE,UAAU,GAAG,SAAS;IAE3D,QAAQ;IACR,OAAO;EAEV"}

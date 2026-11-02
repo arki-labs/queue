@@ -1,0 +1,1 @@
+{"version":3,"file":"errors.d.ts","sourceRoot":"","sources":["../../src/foreman/errors.ts"],"names":[],"mappings":"AAAA,+MAA+M;AAC/M,eAAO,MAAM,yBAAyB;IACpC;;;OAGG;aACH,aAAa,EAAE,iBAAiB;IAChC;;;OAGG;aACH,SAAS,EAAE,iBAAiB;IAC5B;;;OAGG;aACH,YAAY,EAAE,iBAAiB;CACvB,CAAC;AAEX,MAAM,MAAM,qBAAqB,GAAG,CAAC,OAAO,yBAAyB,CAAC,CAAC,MAAM,OAAO,yBAAyB,CAAC,CAAC"}

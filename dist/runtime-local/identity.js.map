@@ -1,0 +1,1 @@
+{"version":3,"file":"identity.js","sourceRoot":"","sources":["../../src/runtime-local/identity.ts"],"names":[],"mappings":"AAAA,8FAA8F;AAC9F,OAAO,EAAE,EAAE,EAAE,MAAM,MAAM,CAAC;AAE1B,MAAM,UAAU,WAAW,CAAC,IAAY,EAAE,GAAW;IACnD,OAAO,EAAE,CAAC,IAAI,CAAC,SAAS,CAAC,CAAC,IAAI,EAAE,GAAG,CAAC,CAAC,EAAE,EAAE,CAAC,GAAG,CAAC,CAAC;AACjD,CAAC"}

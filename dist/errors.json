@@ -1,0 +1,245 @@
+[
+  {
+    "code": "ARKI_QUEUE_E001",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The queue worker did not finish startup within the configured timeout.",
+    "fix": "Check Redis connectivity and worker context creation; raise startupTimeoutMs only when startup legitimately needs longer.",
+    "verify": "bun run test -- src/dot.spec.ts",
+    "source": "src/dot.ts:54"
+  },
+  {
+    "code": "ARKI_QUEUE_E002",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The queue worker was started while already running.",
+    "fix": "Start the app once, or stop the queue worker before starting it again.",
+    "verify": "bun run test -- src/dot.spec.ts",
+    "source": "src/dot.ts:60"
+  },
+  {
+    "code": "ARKI_QUEUE_E003",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The queue worker was stopped before successful startup.",
+    "fix": "Stop only after successful startup or let the Dot lifecycle manage shutdown.",
+    "verify": "bun run test -- src/dot.spec.ts",
+    "source": "src/dot.ts:66"
+  },
+  {
+    "code": "ARKI_QUEUE_E006",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A job, schedule or flow definition has no name.",
+    "fix": "Give the job, schedule or flow a non-empty name before building its definition.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:22"
+  },
+  {
+    "code": "ARKI_QUEUE_E007",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A handler was declared before its input schema.",
+    "fix": "Call .input(schema) before defining the handler or building the declaration.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:28"
+  },
+  {
+    "code": "ARKI_QUEUE_E008",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A flow definition has no steps.",
+    "fix": "Add at least one .step(...) before building a flow.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:34"
+  },
+  {
+    "code": "ARKI_QUEUE_E009",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A flow step depends on an undeclared step.",
+    "fix": "Reference only step ids declared in the same flow.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:40"
+  },
+  {
+    "code": "ARKI_QUEUE_E010",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "Flow step dependencies contain a cycle.",
+    "fix": "Remove dependency cycles so the flow steps form a directed acyclic graph.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:46"
+  },
+  {
+    "code": "ARKI_QUEUE_E011",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A cron interval or time is outside its supported range.",
+    "fix": "Pass cron intervals and times within the helper limits stated by the error.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:52"
+  },
+  {
+    "code": "ARKI_QUEUE_E012",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A schedule wrapping a job declares schedule-level middleware.",
+    "fix": "Remove schedule-level .use() when wrapping a job; put middleware on the job instead.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:58"
+  },
+  {
+    "code": "ARKI_QUEUE_E013",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "Two schedules use the same name.",
+    "fix": "Give each schedule a distinct .name(...), including schedules wrapping the same job.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:64"
+  },
+  {
+    "code": "ARKI_QUEUE_E014",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The job changed since the preview the approval pinned (it failed again, or was touched). HTTP 409.",
+    "fix": "Refresh the failed-job preview and obtain approval for its current revision.",
+    "verify": "bun run test -- src/foreman/foreman.spec.ts",
+    "source": "src/foreman/errors.ts:7"
+  },
+  {
+    "code": "ARKI_QUEUE_E015",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The job is no longer failed: it was already re-queued, or it is gone. HTTP 409.",
+    "fix": "Refresh the job state and select an existing failed job before retrying.",
+    "verify": "bun run test -- src/foreman/foreman.spec.ts",
+    "source": "src/foreman/errors.ts:12"
+  },
+  {
+    "code": "ARKI_QUEUE_E016",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The module has no queue under that key. HTTP 404.",
+    "fix": "Use a queue key registered by the module.",
+    "verify": "bun run test -- src/foreman/foreman.spec.ts",
+    "source": "src/foreman/errors.ts:17"
+  },
+  {
+    "code": "ARKI_QUEUE_E017",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A flow step has more than one dependent.",
+    "fix": "Reshape the flow so a step has at most one dependent; use a supported dependency tree.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:70"
+  },
+  {
+    "code": "ARKI_QUEUE_E018",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The enqueue input does not satisfy the flow input schema.",
+    "fix": "Pass enqueue input accepted by the declared flow input schema.",
+    "verify": "bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts",
+    "source": "src/errors.ts:110"
+  },
+  {
+    "code": "ARKI_QUEUE_E019",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "Queue worker startup has no mounted queue client.",
+    "fix": "Mount queue({ connection }) before feature registration and queueWorker startup.",
+    "verify": "bun run test -- src/dot.spec.ts",
+    "source": "src/dot.ts:72"
+  },
+  {
+    "code": "ARKI_QUEUE_E020",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "A job name contains characters unsupported by the queue backend.",
+    "fix": "Rename the job with only letters, digits and _ - . / (for example \"orders.process\"); a job name is its queue name, and BullMQ and pg-boss reject other characters such as \":\".",
+    "verify": "bun run test -- src/builder-guards.spec.ts",
+    "source": "src/errors.ts:76"
+  },
+  {
+    "code": "OUTBOX_E001",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "An outbox write was attempted outside the business transaction.",
+    "fix": "Call runAfter or runAt inside db.transaction and pass the business transaction handle.",
+    "verify": "bun run test -- src/outbox/outbox.spec.ts",
+    "source": "src/outbox/errors.ts:16"
+  },
+  {
+    "code": "OUTBOX_E002",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The outbox arguments do not satisfy the job input schema.",
+    "fix": "Pass args accepted by the job input schema; inspect the private schema issues.",
+    "verify": "bun run test -- src/outbox/outbox.spec.ts",
+    "source": "src/outbox/errors.ts:22"
+  },
+  {
+    "code": "OUTBOX_E004",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "The outbox delay, scheduled time or priority is invalid.",
+    "fix": "Use a non-negative safe-integer delay, a valid runAt Date and a supported QUEUE_PRIORITIES value.",
+    "verify": "bun run test -- src/outbox/outbox.spec.ts",
+    "source": "src/outbox/errors.ts:28"
+  },
+  {
+    "code": "OUTBOX_E005",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "Stored outbox arguments do not satisfy the registered job input schema.",
+    "fix": "Repair the stored args or restore the matching job schema before retrying the dead row; version job names when inputs change.",
+    "verify": "bun run test -- src/outbox/outbox.spec.ts",
+    "source": "src/outbox/errors.ts:34"
+  },
+  {
+    "code": "OUTBOX_E006",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "An outbox row names a job absent from the runner registry.",
+    "fix": "Register the job in the registry used to construct the outbox runner.",
+    "verify": "bun run test -- src/outbox/outbox.spec.ts",
+    "source": "src/outbox/errors.ts:40"
+  },
+  {
+    "code": "OUTBOX_E007",
+    "package": "@arki/queue",
+    "kind": "thrown",
+    "what": "Two jobs in the outbox registry use the same name.",
+    "fix": "Give each job in the outbox registry a unique name.",
+    "verify": "bun run test -- src/outbox/outbox.spec.ts",
+    "source": "src/outbox/errors.ts:46"
+  },
+  {
+    "code": "queue.acceptance_unknown",
+    "package": "@arki/queue",
+    "kind": "failure",
+    "what": "The queue could not confirm whether the job was accepted.",
+    "fix": "Inspect the job by its idempotency key before enqueueing it again.",
+    "verify": "bun run test -- src/trigger.spec.ts",
+    "source": "src/errors.ts:149"
+  },
+  {
+    "code": "queue.unavailable",
+    "package": "@arki/queue",
+    "kind": "failure",
+    "what": "The job has no active queue transport.",
+    "fix": "Register and start the queue before triggering this job.",
+    "verify": "bun run test -- src/trigger.spec.ts",
+    "source": "src/errors.ts:139"
+  },
+  {
+    "code": "queue.worker_start_failed",
+    "package": "@arki/queue",
+    "kind": "failure",
+    "what": "The queue worker started in the background and failed (Redis down, a slow start, a context factory that threw), so no job runs.",
+    "fix": "Check Redis connectivity and the worker context factory, then restart the app; use `blocking: true` to fail `app.start()` instead.",
+    "verify": "bun run test -- src/dot.spec.ts",
+    "source": "src/errors.ts:159"
+  }
+]

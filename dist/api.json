@@ -1,0 +1,1268 @@
+{
+  "package": "@arki/queue",
+  "version": "0.3.0",
+  "entries": [
+    {
+      "subpath": ".",
+      "name": "around",
+      "kind": "function",
+      "signature": "export declare function around<In extends object>(fn: <T>(ctx: In, next: () => Promise<T>) => Promise<T>): AroundJobMiddleware<In>;",
+      "jsdocSummary": "Wrap a job: `q.job.use(around(inTransaction))`."
+    },
+    {
+      "subpath": ".",
+      "name": "AroundJobMiddleware",
+      "kind": "type",
+      "signature": "export type AroundJobMiddleware<In> = { _type: 'middleware'; /** Tells `.use()` this is an around, so an around that does not fit the job is an error. */ readonly _adapter: 'around'; _fn(opts: { ctx: In; data: unknown; job: JobLike; meta: QueueMeta; next: (opts?: { ctx?: unknown; }) => Promise<MiddlewareResult<unknown>>; }): Promise<MiddlewareResult<unknown>>; };",
+      "jsdocSummary": "The job middleware {@link around} makes: wraps the rest of the chain and the handler, adds nothing."
+    },
+    {
+      "subpath": ".",
+      "name": "backoff",
+      "kind": "variable",
+      "signature": "export declare const backoff: { /** * Waits `base`, then twice as long before each later retry: `base * 2^(attempt - 1)`, * capped at `max`, varied by `jitter`. * * @example backoff.exponential({ base: 200, max: 5000, jitter: 0.25 }).upTo(3) */ exponential(options: ExponentialBackoffOptions): Backoff; /** * Waits the same `ms` before every retry. * * @example backoff.constant(60_000).upTo(1) */ constant(ms: number): Backoff; };",
+      "jsdocSummary": "Builders of a {@link Backoff}. Every builder retries forever until `upTo` limits it."
+    },
+    {
+      "subpath": ".",
+      "name": "Backoff",
+      "kind": "type",
+      "signature": "export type Backoff = { /** * The wait in milliseconds before retry number `attempt` (1 for the first retry) after * `reason` failed the previous try: the error it threw, or the failure it returned. * `undefined` means stop: do not retry. Throws `InvalidBackoffError` when `attempt` is * not a whole number from 1. */ delay(attempt: number, reason: unknown): number | undefined; /** The most retries this backoff allows: what `upTo` set, or `Infinity`. */ readonly maxRetries: number; /** The same backoff, stopping after at most `retries` retries. `upTo(0)` never retries. */ upTo(retries: number): Backoff; /** * The same backoff, also retrying returned failures of these `@arki/failure` * definitions. Thrown errors keep retrying as without `while`; other returned * failures are not retried. Short for * `while(reason => !isFailure(reason) || definitions.some(d => d.is(reason)))`. * * @example backoff.exponential({ base: 100 }).while(DbTimeout, ExportUnavailable) */ while(...definitions: RetryableFailures): Backoff; /** * The same backoff, retrying only the reasons for which `predicate` returns true. A * reason is a thrown error or a returned failure, so the predicate sees both: a * returned failure is retried only when a predicate says yes to it. A negative * predicate such as `reason => !(reason instanceof BadInput)` says yes to failures too. * * @example backoff.exponential({ base: 100 }).while(reason => reason instanceof NetworkError) */ while(predicate: RetryPredicate): Backoff; };",
+      "jsdocSummary": "How long to wait before each retry, and when to stop. Immutable: `upTo` and `while` return a new backoff. Each call narrows the backoff, except that the first `while` decides alone whether a returned failure is retried."
+    },
+    {
+      "subpath": ".",
+      "name": "BullMQAdapter",
+      "kind": "class",
+      "signature": "export declare class BullMQAdapter extends BaseAdapter { private queue; constructor(queue: Queue, options?: Partial<QueueAdapterOptions>); getRedisInfo(): Promise<string>; getName(): string; clean(jobStatus: JobCleanStatus, graceTimeMs: number): Promise<void>; addJob(name: string, data: any, options: QueueJobOptions): Promise<Job<any, any, string>>; getJob(id: string): Promise<Job | undefined>; getJobs(jobStatuses: JobStatus[], start?: number, end?: number): Promise<Job[]>; getJobCounts(): Promise<JobCounts>; getJobLogs(id: string): Promise<string[]>; isPaused(): Promise<boolean>; pause(): Promise<void>; resume(): Promise<void>; empty(): Promise<void>; obliterate(): Promise<void>; promoteAll(): Promise<void>; removeJobScheduler(id: string): Promise<boolean>; getStatuses(): Status[]; getJobStatuses(): JobStatus[]; getClient(): Promise<import(\"bullmq\").RedisClient>; getGlobalConcurrency(): Promise<number | null>; setGlobalConcurrency(concurrency: number): Promise<void>; }",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "BullMQQueueInstance",
+      "kind": "type",
+      "signature": "export type BullMQQueueInstance = QueueInstance & { /** The BullMQ `Queue` of every registered job, by queue name. Empty until `register()` runs. */ queues(): ReadonlyMap<string, Queue>; /** Add a registered job (like its `trigger()`), or start a flow. */ enqueue: QueueEnqueue; };",
+      "jsdocSummary": "The BullMQ-backed queue instance. Adds a read-only view of its BullMQ queues, for tools that read job state (for example the Foreman failed-job source). The runtime-local instance is a plain `QueueInstance`."
+    },
+    {
+      "subpath": ".",
+      "name": "createBoard",
+      "kind": "function",
+      "signature": "export declare function createBoard(options: { /** * Array of BullMQ Queue instances to monitor */ queues: (Queue | undefined)[]; /** * Base path for the UI (default: '/admin/queues') */ basePath?: string; /** * Custom UI options */ uiOptions?: { /** * Board title (default: 'Bull Board') */ boardTitle?: string; /** * Custom logo URL */ boardLogo?: string; /** * Misc UI options */ miscLinks?: { text: string; url: string; }[]; }; }): { /** * The Bull Board instance */ board: { setQueues: (newBullQueues: ReadonlyArray<import(\"@bull-board/api/baseAdapter\").BaseAdapter>) => void; replaceQueues: (newBullQueues: ReadonlyArray<import(\"@bull-board/api/baseAdapter\").BaseAdapter>) => void; addQueue: (queue: import(\"@bull-board/api/baseAdapter\").BaseAdapter) => void; removeQueue: (queueOrName: string | import(\"@bull-board/api/baseAdapter\").BaseAdapter) => void; }; /** * The Hono adapter (use with app.route()) */ adapter: HonoAdapter; /** * Add a queue to the board dynamically */ addQueue: (queue: Queue) => void; /** * Remove a queue from the board */ removeQueue: (queueName: string) => void; };",
+      "jsdocSummary": "Create a Bull Board UI for monitoring queues"
+    },
+    {
+      "subpath": ".",
+      "name": "createDurableScheduler",
+      "kind": "function",
+      "signature": "export declare function createDurableScheduler(options: DurableSchedulerOptions): DurableScheduler;",
+      "jsdocSummary": "Create the BullMQ-backed durable scheduler. Inert until `start`: no Redis connection is opened when it is created."
+    },
+    {
+      "subpath": ".",
+      "name": "createJobContext",
+      "kind": "function",
+      "signature": "export declare function createJobContext<TContext>(baseContext: TContext, job: JobLike, signal?: AbortSignal): JobContext<TContext>;",
+      "jsdocSummary": "Create a job context with utility methods Wraps the base context with updateProgress, log, and job instance"
+    },
+    {
+      "subpath": ".",
+      "name": "CronPatterns",
+      "kind": "variable",
+      "signature": "export declare const CronPatterns: { /** * Every N seconds (requires 6-field cron support) * @example CronPatterns.everySeconds(5) // \"* /5 * * * * *\" - Every 5 seconds * @example CronPatterns.everySeconds(30) // \"* /30 * * * * *\" - Every 30 seconds */ readonly everySeconds: (n: number) => string; /** * Every N minutes * @example CronPatterns.everyMinutes(5) // \"* /5 * * * *\" - Every 5 minutes * @example CronPatterns.everyMinutes(15) // \"* /15 * * * *\" - Every 15 minutes */ readonly everyMinutes: (n: number) => string; /** * Every N hours * @example CronPatterns.everyHours(2) // \"0 0-23/2 * * *\" - Every 2 hours * @example CronPatterns.everyHours(6) // \"0 0-23/6 * * *\" - Every 6 hours */ readonly everyHours: (n: number) => string; /** * Every N days at specified time * @example CronPatterns.everyDays(2, '09:00') // \"0 9 * /2 * *\" - Every 2 days at 9am */ readonly everyDays: (n: number, time: string) => string; /** * Daily at specified time * @example CronPatterns.daily('09:00') // \"0 9 * * *\" - Every day at 9am * @example CronPatterns.daily('14:30') // \"30 14 * * *\" - Every day at 2:30pm * @example CronPatterns.daily('23') // \"0 23 * * *\" - Every day at 11pm */ readonly daily: (time: string) => string; /** * Weekdays (Monday-Friday) at specified time * @example CronPatterns.weekdays('09:00') // \"0 9 * * 1-5\" - Weekdays at 9am * @example CronPatterns.weekdays('17:30') // \"30 17 * * 1-5\" - Weekdays at 5:30pm */ readonly weekdays: (time: string) => string; /** * Weekends (Saturday-Sunday) at specified time * @example CronPatterns.weekends('10:00') // \"0 10 * * 0,6\" - Weekends at 10am * @example CronPatterns.weekends('14:00') // \"0 14 * * 0,6\" - Weekends at 2pm */ readonly weekends: (time: string) => string; /** * Weekly on specific day at specified time * @example CronPatterns.weekly('monday', '09:00') // \"0 9 * * 1\" - Mondays at 9am * @example CronPatterns.weekly('friday', '17:00') // \"0 17 * * 5\" - Fridays at 5pm */ readonly weekly: (day: DayOfWeek, time: string) => string; /** * Monthly on specific day at specified time * @example CronPatterns.monthly(1, '09:00') // \"0 9 1 * *\" - First day of month at 9am * @example CronPatterns.monthly(15, '12:00') // \"0 12 15 * *\" - 15th of month at noon */ readonly monthly: (day: number, time: string) => string; /** * First day of month at specified time * @example CronPatterns.monthlyStart('09:00') // \"0 9 1 * *\" - First day of month at 9am */ readonly monthlyStart: (time: string) => string; /** * Last day of month at specified time (approximation using 28th) * Note: This uses 28th as it's safe for all months * @example CronPatterns.monthlyEnd('23:59') // \"59 23 28 * *\" - 28th of month at 11:59pm */ readonly monthlyEnd: (time: string) => string; /** * Quarterly on first day at specified time * @example CronPatterns.quarterly('09:00') // \"0 9 1 * /3 *\" - Quarterly at 9am */ readonly quarterly: (time: string) => string; /** * Yearly on January 1st at specified time * @example CronPatterns.yearly('00:00') // \"0 0 1 1 *\" - January 1st at midnight */ readonly yearly: (time: string) => string; /** * Every second (requires 6-field cron support) */ readonly everySecond: '* * * * * *'; /** * Every 5 seconds (requires 6-field cron support) */ readonly everyFiveSeconds: '*/5 * * * * *'; /** * Every 10 seconds (requires 6-field cron support) */ readonly everyTenSeconds: '*/10 * * * * *'; /** * Every 30 seconds (requires 6-field cron support) */ readonly everyThirtySeconds: '*/30 * * * * *'; /** * Every minute (at the start of the minute) */ readonly everyMinute: '*/1 * * * *'; /** * Every 5 minutes */ readonly everyFiveMinutes: '*/5 * * * *'; /** * Every 10 minutes */ readonly everyTenMinutes: '*/10 * * * *'; /** * Every 15 minutes */ readonly everyFifteenMinutes: '*/15 * * * *'; /** * Every 30 minutes */ readonly everyThirtyMinutes: '*/30 * * * *'; /** * Every hour (at the start of the hour) */ readonly hourly: '0 * * * *'; /** * Every 2 hours */ readonly everyTwoHours: '0 */2 * * *'; /** * Every 3 hours */ readonly everyThreeHours: '0 */3 * * *'; /** * Every 4 hours */ readonly everyFourHours: '0 */4 * * *'; /** * Every 6 hours */ readonly everySixHours: '0 */6 * * *'; /** * Every 12 hours */ readonly everyTwelveHours: '0 */12 * * *'; /** * Every day at midnight (00:00) */ readonly midnight: '0 0 * * *'; /** * Every day at noon (12:00) */ readonly noon: '0 12 * * *'; /** * Every day at 6am */ readonly morningAt6: '0 6 * * *'; /** * Every day at 9am */ readonly morningAt9: '0 9 * * *'; /** * Every day at 6pm */ readonly eveningAt6: '0 18 * * *'; /** * Every Monday at 9am */ readonly mondayMorning: '0 9 * * 1'; /** * Every Friday at 5pm */ readonly fridayEvening: '0 17 * * 5'; /** * First day of every month at midnight */ readonly monthlyAtMidnight: '0 0 1 * *'; /** * First day of every month at 9am */ readonly monthlyAtNine: '0 9 1 * *'; };",
+      "jsdocSummary": "Time-based helpers"
+    },
+    {
+      "subpath": ".",
+      "name": "DayOfWeek",
+      "kind": "type",
+      "signature": "export type DayOfWeek = keyof typeof DAY_OF_WEEK;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "DurableScheduler",
+      "kind": "type",
+      "signature": "export type DurableScheduler = { readonly start: (schedules: readonly DurableScheduleRegistration[]) => Promise<void>; readonly stop: () => Promise<void>; };",
+      "jsdocSummary": "The port a durable backend implements (`@arki/queue` ships the BullMQ one). `start` registers every durable schedule and begins running them; `stop` stops running them and must be safe to call more than once."
+    },
+    {
+      "subpath": ".",
+      "name": "DurableSchedulerOptions",
+      "kind": "type",
+      "signature": "export type DurableSchedulerOptions = { readonly connection: QueueConnection; /** BullMQ key prefix. Default `'queue:'`, the same default as `createQueue`. */ readonly keyPrefix?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "executeJob",
+      "kind": "function",
+      "signature": "export declare function executeJob<Input, Output, Dependencies>(internal: InternalJobDefinition<Input, Output, Dependencies>, job: JobLike, createContext: () => unknown, services?: object, signal?: AbortSignal, traceMetadata?: string): Promise<Output | JobExecutionFailure>;",
+      "jsdocSummary": "Preserve the handler's exact success/refusal union; add only canonical execution failures. A deadline aborts the owned signal, then waits for cooperative settlement before retry is possible."
+    },
+    {
+      "subpath": ".",
+      "name": "executeMiddlewareChain",
+      "kind": "function",
+      "signature": "export declare function executeMiddlewareChain<TContext, TContextOut, TOutput, TMiddlewareOutput = never>(middlewares: readonly JobMiddleware<unknown, unknown, QueueMeta, TMiddlewareOutput>[], initialContext: TContext, data: unknown, job: JobLike, meta: QueueMeta, handler: (ctx: TContextOut) => Promise<TOutput>): Promise<TOutput | TMiddlewareOutput | undefined>;",
+      "jsdocSummary": "Run a job's middleware chain around its handler (onion order). Similar to tRPC's middleware execution but adapted for jobs"
+    },
+    {
+      "subpath": ".",
+      "name": "FLOW_ENQUEUE_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const FLOW_ENQUEUE_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"schema.invalid_input\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { issues: readonly import(\"@standard-schema/spec\").StandardSchemaV1.Issue[]; }>>, import(\"@arki/failure\").FailureDefinition<\"schema.validator_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "FlowDefinition",
+      "kind": "type",
+      "signature": "export type FlowDefinition<TInput = unknown> = { _type: 'flow'; _internal: unknown; /** Type-only: carries the input type so `enqueue(flow, input)` infers it. Never set at runtime. */ readonly _input?: TInput; };",
+      "jsdocSummary": "Flow definition. Start one with `enqueue(flow, input)`."
+    },
+    {
+      "subpath": ".",
+      "name": "FlowEnqueueFailure",
+      "kind": "type",
+      "signature": "export type FlowEnqueueFailure = ReturnType<(typeof FLOW_ENQUEUE_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "FlowEnqueueResult",
+      "kind": "type",
+      "signature": "export type FlowEnqueueResult = { readonly flow: string; readonly jobIds: Readonly<Record<string, string>>; };",
+      "jsdocSummary": "What `enqueue(flow, input)` created: the BullMQ job id of every step, by step id."
+    },
+    {
+      "subpath": ".",
+      "name": "FlowStepOptions",
+      "kind": "type",
+      "signature": "export type FlowStepOptions = Omit<JobsOptions, 'parent' | 'repeat' | 'deduplication' | 'attempts' | 'backoff'>;",
+      "jsdocSummary": "BullMQ options of one flow step's job. `parent` and `repeat` are owned by the flow (the tree sets parents; a flow step does not repeat)."
+    },
+    {
+      "subpath": ".",
+      "name": "HonoAdapter",
+      "kind": "class",
+      "signature": "export declare class HonoAdapter implements IServerAdapter { protected serveStatic: typeof bunServeStatic | typeof nodeServeStatic | typeof cloudflarePagesServeStatic | typeof cloudflareWorkersServeStatic | typeof denoServeStatic; /** * only required for Cloudflare Workers. you should import it like this: * * import manifest from '__STATIC_CONTENT_MANIFEST' * * ... and pass it as-is to the HonoAdapter constructor. */ protected manifest: Record<string, unknown>; protected bullBoardQueues: BullBoardQueues | undefined; protected errorHandler: ((error: Error) => ControllerHandlerReturnType) | undefined; protected uiConfig?: UIConfig; protected staticRoute?: string; protected staticPath?: string; protected entryRoute?: AppViewRoute; protected viewPath?: string; protected apiRoutes: Hono; protected basePath: string; constructor(serveStatic: typeof bunServeStatic | typeof nodeServeStatic | typeof cloudflarePagesServeStatic | typeof cloudflareWorkersServeStatic | typeof denoServeStatic, /** * only required for Cloudflare Workers. you should import it like this: * * import manifest from '__STATIC_CONTENT_MANIFEST' * * ... and pass it as-is to the HonoAdapter constructor. */ manifest?: Record<string, unknown>); setBasePath(path: string): this; setStaticPath(staticRoute: string, staticPath: string): this; setViewsPath(viewPath: string): this; setErrorHandler(handler: (error: Error) => ControllerHandlerReturnType): this; setApiRoutes(routes: readonly AppControllerRoute[]): this; setEntryRoute(routeDef: AppViewRoute): this; setQueues(bullBoardQueues: BullBoardQueues): this; setUIConfig(config: UIConfig): this; registerPlugin(): Hono<import(\"hono/types\").BlankEnv, import(\"hono/types\").BlankSchema, \"/\">; private registerRoute; }",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "initQueue",
+      "kind": "variable",
+      "signature": "export declare const initQueue: { /** * Configure context type for the queue */ context<TContext>(): { /** * Configure metadata type for the queue */ meta<TMeta extends QueueMeta>(): { /** * Create the queue builder with configuration */ create(config?: Partial<QueueConfig>): QueueBuilder<TContext, TMeta>; }; /** * Create the queue builder without metadata */ create(config?: Partial<QueueConfig>): QueueBuilder<TContext, QueueMeta>; }; /** * Create the queue builder without context or metadata */ create<TContext = Record<string, never>>(config?: Partial<QueueConfig>): QueueBuilder<TContext, QueueMeta>; };",
+      "jsdocSummary": "Initialize queue system This is the entry point, similar to tRPC's initTRPC"
+    },
+    {
+      "subpath": ".",
+      "name": "InternalFlowDefinition",
+      "kind": "type",
+      "signature": "export type InternalFlowDefinition<TInput = unknown, TJob = JobDefinition<unknown, unknown, unknown>> = { /** * Flow name */ name: string; /** * Input schema for the flow */ inputSchema: StandardSchemaV1<unknown, TInput>; /** * Steps in the flow */ steps: readonly FlowStepInternal<TJob>[]; /** * Queue configuration */ config: QueueConfig; };",
+      "jsdocSummary": "Internal flow definition structure This is what gets stored in FlowDefinition._internal"
+    },
+    {
+      "subpath": ".",
+      "name": "InternalScheduleDefinition",
+      "kind": "type",
+      "signature": "export type InternalScheduleDefinition<TJob = JobDefinition<unknown, unknown, unknown>> = { /** * Type of schedule (cron, interval or timeout) */ type: ScheduleType; /** * Schedule value (cron pattern, or interval/delay in ms) */ value: string | number; /** * Schedule options (timezone for cron) */ options?: { timezone?: string; }; /** * Schedule name (the job scheduler id on the job's queue) */ name: string; /** * The job each tick adds to: the wrapped job, or for an inline schedule an * anonymous job named after the schedule, whose middleware is the schedule's `.use()` chain */ job: TJob; /** * Whether `job` is the inline schedule's own anonymous job (only this package writes to its queue) */ inline: boolean; /** * The data each tick adds (`{}` for an inline schedule) */ data: unknown; /** * Queue configuration */ config: QueueConfig; };",
+      "jsdocSummary": "Internal schedule definition structure This is what gets stored in ScheduleDefinition._internal"
+    },
+    {
+      "subpath": ".",
+      "name": "JOB_SYSTEM_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const JOB_SYSTEM_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"async.cancelled\", undefined>, import(\"@arki/failure\").FailureDefinition<\"async.deadline\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "JOB_TRIGGER_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const JOB_TRIGGER_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"schema.invalid_input\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { issues: readonly import(\"@standard-schema/spec\").StandardSchemaV1.Issue[]; }>>, import(\"@arki/failure\").FailureDefinition<\"schema.validator_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": "Every failure a job trigger can return — spread it into a contract's error map."
+    },
+    {
+      "subpath": ".",
+      "name": "JobBuilderChain",
+      "kind": "type",
+      "signature": "export type JobBuilderChain<TContext, TContextOut, TMeta extends QueueMeta, TInput, TOutput, TFailure extends Failure = never> = { /** * Set input schema */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): JobBuilderChain<TContext, TContextOut, TMeta, TNewInput, TOutput, TFailure>; /** * Set job options */ options(options: JobOptions): JobBuilderChain<TContext, TContextOut, TMeta, TInput, TOutput, TFailure>; /** * Set handler function (completes the builder) */ handler<TResult>(handler: (data: TInput, ctx: TContextOut) => Promise<TResult>): JobDefinition<TInput, TResult | TFailure, TContextOut>; };",
+      "jsdocSummary": "Job builder chain - after name and input are set"
+    },
+    {
+      "subpath": ".",
+      "name": "JobBuilderDef",
+      "kind": "type",
+      "signature": "export type JobBuilderDef<TContext, TContextOut, TMeta extends QueueMeta, TFailure extends Failure = never> = { /** * Add a `step(fn)`: the job's context gains what the step returns, and the * step's refusals join the job's result. The job's context must have the * keys the step reads. */ use<TIn, TAdded extends object, TRefused extends Failure>(middleware: StepJobMiddleware<TIn, TAdded, TRefused> & FitsContext<TContextOut, TIn>): JobBuilderDef<TContext, TContextOut & TAdded, TMeta, TFailure | TRefused>; /** Add an `around(fn)`: wraps later steps and the handler; the context is unchanged. */ use<TIn>(middleware: AroundJobMiddleware<TIn> & FitsContext<TContextOut, TIn>): JobBuilderDef<TContext, TContextOut, TMeta, TFailure>; /** * Add middleware to this job builder * Middleware can transform context, add logging, handle errors, etc. */ use<TContextOut2, TNextFailure extends Failure = never>(middleware: JobMiddleware<TContextOut, TContextOut2, TMeta, TNextFailure> & { readonly _adapter?: never; }): JobBuilderDef<TContext, TContextOut2, TMeta, TFailure | TNextFailure>; /** * Set the job name (starts the chainable builder) */ name(name: string): JobBuilderNeedsInput<TContext, TContextOut, TMeta, TFailure>; };",
+      "jsdocSummary": "Job builder definition - chainable builder for creating jobs Similar to tRPC's procedure builder"
+    },
+    {
+      "subpath": ".",
+      "name": "JobBuilderNeedsInput",
+      "kind": "type",
+      "signature": "export type JobBuilderNeedsInput<TContext, TContextOut, TMeta extends QueueMeta, TFailure extends Failure = never> = { /** * Set input schema (unlocks `.handler()`) */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): JobBuilderChain<TContext, TContextOut, TMeta, TNewInput, never, TFailure>; /** * Set job options */ options(options: JobOptions): JobBuilderNeedsInput<TContext, TContextOut, TMeta, TFailure>; };",
+      "jsdocSummary": "Job builder after name is set, before input is set. Has no `.handler()`: calling it here is a compile error (\"Call .input() first\")."
+    },
+    {
+      "subpath": ".",
+      "name": "JobContext",
+      "kind": "type",
+      "signature": "export type JobContext<TDeps = Record<string, never>> = { /** * Update job progress (0-100) */ updateProgress: (progress: number) => Promise<void>; /** * Log a message for this job */ log: (message: string) => Promise<void>; /** * The job that runs: a BullMQ `Job`, or the same shape from another lane */ job: JobLike; /** Cooperative cancellation; honor it before starting further side effects. */ signal: AbortSignal; } & TDeps;",
+      "jsdocSummary": "Context provided to job handlers"
+    },
+    {
+      "subpath": ".",
+      "name": "JobDefinition",
+      "kind": "type",
+      "signature": "export type JobDefinition<TInput, TOutput, TDeps = Record<string, never>> = { _type: 'job'; _internal: InternalJobDefinition<TInput, TOutput, TDeps>; /** * Trigger a job with the given input data * @param data - Input data for the job * @param options - Optional trigger options (priority, delay, etc.) * @returns Promise resolving to the job ID */ trigger: (data: TInput, options?: TriggerOptions) => Promise<JobTriggerResult>; };",
+      "jsdocSummary": "Job definition created by job builder"
+    },
+    {
+      "subpath": ".",
+      "name": "JobExecutionFailure",
+      "kind": "type",
+      "signature": "export type JobExecutionFailure = AsyncSchemaFailure | JobSystemFailure;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "JobHandler",
+      "kind": "type",
+      "signature": "export type JobHandler<TInput, TOutput, TDeps = Record<string, never>> = (data: TInput, ctx: JobContext<TDeps>) => Promise<TOutput>;",
+      "jsdocSummary": "Handler function for processing jobs"
+    },
+    {
+      "subpath": ".",
+      "name": "JobLike",
+      "kind": "type",
+      "signature": "export type JobLike = { /** The job id. Stable across retries: pass it on as an idempotency key. */ readonly id?: string; readonly name: string; /** The stored input, before the schema parsed it. */ readonly data: unknown; /** Tries that failed before this one: 0 on the first try. */ readonly attemptsMade: number; updateProgress(progress: number): Promise<unknown>; log(message: string): Promise<unknown>; };",
+      "jsdocSummary": "What a handler and its middleware see of the job that runs. A BullMQ `Job` fits, and so do the runtime-local queue's job and an outbox row (`@arki/queue/outbox`)."
+    },
+    {
+      "subpath": ".",
+      "name": "JobMiddleware",
+      "kind": "type",
+      "signature": "export type JobMiddleware<TContextOut1, TContextOut2, TMeta extends QueueMeta, TFailure = never> = { _type: 'middleware'; _fn: MiddlewareFunction<TContextOut1, TContextOut2, TMeta, TFailure>; };",
+      "jsdocSummary": "Job middleware wrapper Contains the middleware function and type information"
+    },
+    {
+      "subpath": ".",
+      "name": "JobOptions",
+      "kind": "type",
+      "signature": "export type JobOptions = { maxParallelism?: number; /** Abort the handler signal after this duration. Settlement waits for owned work to finish. */ timeoutMs?: number; /** Native abandoned-claim supervision for the pg-boss lane. Handler retry uses `retry`. */ runtimeLocalOptions?: Pick<PgBossQueueOptions, 'expireInSeconds' | 'heartbeatSeconds'>; /** * When a failed job runs again, and how long it waits first: a `backoff` from * `@arki/resilience` (re-exported here). Default: `backoff.exponential({ base: 1000 }).upTo(2)`, * so 3 tries in all, 1 s and then 2 s apart. */ retry?: Backoff; /** * How long the journal keeps this job's finished and dead rows when it runs through the outbox. * Overrides the journal's retention for this job name. The BullMQ lane ignores it. */ retention?: EffectRetention; bullmqOptions?: Partial<Omit<JobsOptions, 'attempts' | 'backoff'>>; workerOptions?: Partial<WorkerOptions>; };",
+      "jsdocSummary": "Options for job definitions"
+    },
+    {
+      "subpath": ".",
+      "name": "JobSystemFailure",
+      "kind": "type",
+      "signature": "export type JobSystemFailure = ReturnType<(typeof JOB_SYSTEM_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "JobTriggerFailure",
+      "kind": "type",
+      "signature": "export type JobTriggerFailure = ReturnType<(typeof JOB_TRIGGER_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "JobTriggerResult",
+      "kind": "type",
+      "signature": "export type JobTriggerResult = QueueJobId | JobTriggerFailure;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "MiddlewareFunction",
+      "kind": "type",
+      "signature": "export type MiddlewareFunction<TContextOut1, TContextOut2, TMeta extends QueueMeta, TFailure = never> = (opts: { /** * Current context (from previous middleware or base context) */ ctx: TContextOut1; /** * Job data */ data: unknown; /** * The job that runs: a BullMQ `Job`, or the same shape from another lane */ job: JobLike; /** * Metadata (can be used for tracking, logging, etc.) */ meta: TMeta; /** * Call the next middleware, or the handler after the last one. * Resolves only once everything inside has finished, handler included, and * rejects with the handler's error, so `try { return await next() } finally { ... }` * wraps the handler. Can optionally replace the context for what follows. */ next: (opts?: { ctx?: TContextOut2; }) => Promise<MiddlewareResult<TContextOut2>>; }) => Promise<MiddlewareResult<TContextOut2> | TFailure>;",
+      "jsdocSummary": "Middleware function signature Similar to tRPC middleware but adapted for job processing"
+    },
+    {
+      "subpath": ".",
+      "name": "QUEUE_DEFINITION_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_DEFINITION_ERROR_CODES: { /** * A job, schedule or flow definition has no name. * @fix Give the job, schedule or flow a non-empty name before building its definition. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly missingName: 'ARKI_QUEUE_E006'; /** * A handler was declared before its input schema. * @fix Call .input(schema) before defining the handler or building the declaration. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly missingInput: 'ARKI_QUEUE_E007'; /** * A flow definition has no steps. * @fix Add at least one .step(...) before building a flow. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly missingSteps: 'ARKI_QUEUE_E008'; /** * A flow step depends on an undeclared step. * @fix Reference only step ids declared in the same flow. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly unknownStepDependency: 'ARKI_QUEUE_E009'; /** * Flow step dependencies contain a cycle. * @fix Remove dependency cycles so the flow steps form a directed acyclic graph. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly circularStepDependency: 'ARKI_QUEUE_E010'; /** * A cron interval or time is outside its supported range. * @fix Pass cron intervals and times within the helper limits stated by the error. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly invalidCronValue: 'ARKI_QUEUE_E011'; /** * A schedule wrapping a job declares schedule-level middleware. * @fix Remove schedule-level .use() when wrapping a job; put middleware on the job instead. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly scheduleMiddlewareWithJob: 'ARKI_QUEUE_E012'; /** * Two schedules use the same name. * @fix Give each schedule a distinct .name(...), including schedules wrapping the same job. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly duplicateScheduleName: 'ARKI_QUEUE_E013'; /** * A flow step has more than one dependent. * @fix Reshape the flow so a step has at most one dependent; use a supported dependency tree. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly stepWithManyDependents: 'ARKI_QUEUE_E017'; /** * A job name contains characters unsupported by the queue backend. * @fix Rename the job with only letters, digits and _ - . / (for example \"orders.process\"); a job name is its queue name, and BullMQ and pg-boss reject other characters such as \":\". * @verify bun run test -- src/builder-guards.spec.ts */ readonly invalidJobName: 'ARKI_QUEUE_E020'; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "QUEUE_INPUT_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_INPUT_ERROR_CODES: { /** * The enqueue input does not satisfy the flow input schema. * @fix Pass enqueue input accepted by the declared flow input schema. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly invalidFlowInput: 'ARKI_QUEUE_E018'; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "QUEUE_PRIORITIES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_PRIORITIES: { readonly CRITICAL: 1; readonly HIGH: 3; readonly NORMAL: 5; readonly LOW: 7; readonly BACKGROUND: 10; };",
+      "jsdocSummary": "Standard priority levels for jobs"
+    },
+    {
+      "subpath": ".",
+      "name": "QueueAcceptanceUnknown",
+      "kind": "variable",
+      "signature": "export declare const QueueAcceptanceUnknown: import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>;",
+      "jsdocSummary": "The queue could not confirm whether the job was accepted."
+    },
+    {
+      "subpath": ".",
+      "name": "QueueBuilder",
+      "kind": "type",
+      "signature": "export type QueueBuilder<TContext, TMeta extends QueueMeta = QueueMeta> = { /** * The configuration used to create this builder */ readonly _config: QueueConfig; /** * Base job builder with no middleware * Similar to tRPC's base procedure * Output context is JobContext<TContext> because runtime wraps user context */ readonly job: JobBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Create middleware for jobs * * By default, middleware maintains JobContext<TContext> as both input and output. * Provide explicit type parameters to transform context: * - middleware<MyContextIn, MyContextOut>(...) for full control * - middleware<MyContext>(...) to use same type for input and output */ middleware: { <TContextIn = JobContext<TContext>, TContextOut = TContextIn>(fn: MiddlewareFunction<TContextIn, TContextOut, TMeta>): JobMiddleware<TContextIn, TContextOut, TMeta>; <TContextIn = JobContext<TContext>, TContextOut = TContextIn, TFailure extends Failure = never>(fn: MiddlewareFunction<TContextIn, TContextOut, TMeta, TFailure>): JobMiddleware<TContextIn, TContextOut, TMeta, TFailure>; }; /** * Create a job registry for organizing jobs by feature */ registry: <TRegistry extends Record<string, unknown>>(jobs: TRegistry) => TRegistry; /** * Create a schedule builder */ schedule: ScheduleBuilderFactory<TContext, TMeta>; /** * Create a flow builder */ flow: FlowBuilderFactory<TContext, TMeta>; /** * Create a queue instance that can register and run jobs */ createQueue: (options: { connection: QueueConnection; keyPrefix?: string; createContext: () => TContext | Promise<TContext>; }) => BullMQQueueInstance; };",
+      "jsdocSummary": "Queue builder returned by initQueue Similar to tRPC's initTRPC builder"
+    },
+    {
+      "subpath": ".",
+      "name": "QueueDefinitionError",
+      "kind": "class",
+      "signature": "export declare class QueueDefinitionError extends Error { readonly code: (typeof QUEUE_DEFINITION_ERROR_CODES)[keyof typeof QUEUE_DEFINITION_ERROR_CODES]; readonly remediation: string; constructor(args: { readonly code: (typeof QUEUE_DEFINITION_ERROR_CODES)[keyof typeof QUEUE_DEFINITION_ERROR_CODES]; readonly message: string; readonly remediation: string; }); }",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "QueueEnqueue",
+      "kind": "type",
+      "signature": "export type QueueEnqueue = { <TInput, TOutput, TContext>(job: JobDefinition<TInput, TOutput, TContext>, data: TInput, options?: TriggerOptions): Promise<JobTriggerResult>; <TInput>(flow: FlowDefinition<TInput>, input: NoInfer<TInput>): Promise<FlowEnqueueResult | FlowEnqueueFailure>; };",
+      "jsdocSummary": "Add one job to its queue (returns its BullMQ job id), or start one flow (validates `input` with the flow's schema, then adds every step's job)."
+    },
+    {
+      "subpath": ".",
+      "name": "QueueInputError",
+      "kind": "class",
+      "signature": "export declare class QueueInputError extends Error { readonly code: (typeof QUEUE_INPUT_ERROR_CODES)[keyof typeof QUEUE_INPUT_ERROR_CODES]; readonly remediation: string; constructor(args: { readonly code: (typeof QUEUE_INPUT_ERROR_CODES)[keyof typeof QUEUE_INPUT_ERROR_CODES]; readonly message: string; readonly remediation: string; readonly cause: unknown; }); }",
+      "jsdocSummary": "Data handed to `enqueue()` failed its schema. Thrown before anything is written to Redis, so no part of the flow starts. `cause` is the schema error."
+    },
+    {
+      "subpath": ".",
+      "name": "QueueInstance",
+      "kind": "type",
+      "signature": "export type QueueInstance = { /** * Register a job registry */ register(registry: Record<string, unknown>, options?: RegisterOptions): Promise<void>; /** * Start all registered workers */ start(): Promise<void>; /** * Stop all workers and close connections */ stop(): Promise<void>; };",
+      "jsdocSummary": "Queue instance that can register and run jobs"
+    },
+    {
+      "subpath": ".",
+      "name": "queueJobId",
+      "kind": "variable",
+      "signature": "export declare const queueJobId: import(\"@arki/contracts\").BrandedIdDeclaration<\"\", \"queue.job\">;",
+      "jsdocSummary": "Opaque external keys remain valid; newly generated keys retain UUID v4 bytes."
+    },
+    {
+      "subpath": ".",
+      "name": "QueueJobId",
+      "kind": "type",
+      "signature": "export type QueueJobId = IdOf<typeof queueJobId>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "QueuePriority",
+      "kind": "type",
+      "signature": "export type QueuePriority = (typeof QUEUE_PRIORITIES)[keyof typeof QUEUE_PRIORITIES];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": ".",
+      "name": "QueueUnavailable",
+      "kind": "variable",
+      "signature": "export declare const QueueUnavailable: import(\"@arki/failure\").FailureDefinition<\"queue.unavailable\", undefined>;",
+      "jsdocSummary": "The job has no active queue transport."
+    },
+    {
+      "subpath": ".",
+      "name": "QueueWorkerStartFailed",
+      "kind": "variable",
+      "signature": "export declare const QueueWorkerStartFailed: import(\"@arki/failure\").FailureDefinition<\"queue.worker_start_failed\", undefined>;",
+      "jsdocSummary": "The queue worker started in the background and failed (Redis down, a slow start, a context factory that threw), so no job runs."
+    },
+    {
+      "subpath": ".",
+      "name": "ScheduleDefinition",
+      "kind": "type",
+      "signature": "export type ScheduleDefinition = { _type: 'schedule'; _internal: unknown; };",
+      "jsdocSummary": "Schedule definition (opaque type for now)"
+    },
+    {
+      "subpath": ".",
+      "name": "step",
+      "kind": "function",
+      "signature": "export declare function step<In extends object, R extends object | PromiseLike<object>>(fn: (ctx: In) => R): StepJobMiddleware<In, Extract<SuccessOf<(ctx: In) => R>, object>, FailureOf<(ctx: In) => R>>;",
+      "jsdocSummary": "Run a step before a job's handler: `q.job.use(step(authed))`."
+    },
+    {
+      "subpath": ".",
+      "name": "StepJobMiddleware",
+      "kind": "type",
+      "signature": "export type StepJobMiddleware<In, Added extends object, Refused extends Failure> = { _type: 'middleware'; /** Tells `.use()` this is a step, so a step that does not fit the job is an error, not a plain middleware. */ readonly _adapter: 'step'; /** Carries `Added` to the type of the job's context; never set. */ readonly _added?: Added; _fn(opts: { ctx: In; data: unknown; job: JobLike; meta: QueueMeta; next: (opts?: { ctx?: unknown; }) => Promise<MiddlewareResult<unknown>>; }): Promise<MiddlewareResult<unknown> | Refused>; };",
+      "jsdocSummary": "The job middleware {@link step} makes: reads `In`, adds `Added`, or refuses with `Refused`. `.use()` checks it against the job's context (`FitsContext`) and adds `Added` to what the handler sees. `_fn` is a method so the job can store it with the other middleware (method parameters are bivariant)."
+    },
+    {
+      "subpath": ".",
+      "name": "TriggerOptions",
+      "kind": "type",
+      "signature": "export type TriggerOptions = { /** Job priority (lower number = higher priority) */ priority?: QueuePriority; /** Delay in milliseconds before processing */ delay?: number; /** Custom job ID (defaults to auto-generated) */ jobId?: string; /** Additional BullMQ job options */ bullmqOptions?: Partial<Omit<JobsOptions, 'attempts' | 'backoff'>>; };",
+      "jsdocSummary": "Options for triggering a job"
+    },
+    {
+      "subpath": "./contract",
+      "name": "JOB_TRIGGER_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const JOB_TRIGGER_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"schema.invalid_input\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { issues: readonly import(\"@standard-schema/spec\").StandardSchemaV1.Issue[]; }>>, import(\"@arki/failure\").FailureDefinition<\"schema.validator_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": "Every failure a job trigger can return — spread it into a contract's error map."
+    },
+    {
+      "subpath": "./contract",
+      "name": "JobTriggerFailure",
+      "kind": "type",
+      "signature": "export type JobTriggerFailure = ReturnType<(typeof JOB_TRIGGER_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./contract",
+      "name": "JobTriggerResult",
+      "kind": "type",
+      "signature": "export type JobTriggerResult = QueueJobId | JobTriggerFailure;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./contract",
+      "name": "QueueAcceptanceUnknown",
+      "kind": "variable",
+      "signature": "export declare const QueueAcceptanceUnknown: import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>;",
+      "jsdocSummary": "The queue could not confirm whether the job was accepted."
+    },
+    {
+      "subpath": "./contract",
+      "name": "queueJobId",
+      "kind": "variable",
+      "signature": "export declare const queueJobId: import(\"@arki/contracts\").BrandedIdDeclaration<\"\", \"queue.job\">;",
+      "jsdocSummary": "Opaque external keys remain valid; newly generated keys retain UUID v4 bytes."
+    },
+    {
+      "subpath": "./contract",
+      "name": "QueueJobId",
+      "kind": "type",
+      "signature": "export type QueueJobId = IdOf<typeof queueJobId>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./contract",
+      "name": "QueueUnavailable",
+      "kind": "variable",
+      "signature": "export declare const QueueUnavailable: import(\"@arki/failure\").FailureDefinition<\"queue.unavailable\", undefined>;",
+      "jsdocSummary": "The job has no active queue transport."
+    },
+    {
+      "subpath": "./dot",
+      "name": "DURABLE_SCHEDULES_KEY",
+      "kind": "variable",
+      "signature": "export declare const DURABLE_SCHEDULES_KEY = \"arki.schedule.durable\";",
+      "jsdocSummary": "Wire key of `@arki/schedule`'s `DurableSchedules` token. Kept as a plain string so `@arki/queue` does not depend on `@arki/schedule`; the app builder checks that the provided service fits what `schedule()` needs."
+    },
+    {
+      "subpath": "./dot",
+      "name": "durableScheduler",
+      "kind": "function",
+      "signature": "export declare function durableScheduler(options: DurableSchedulerOptions): ReturnType<typeof createDurableSchedulerPlugin<'durable-scheduler'>>; ; export declare function durableScheduler<N extends string>(options: DurableSchedulerOptions & { readonly name: N; }): ReturnType<typeof createDurableSchedulerPlugin<N>>;",
+      "jsdocSummary": "Provide the BullMQ durable backend for `@arki/schedule`. Mount it before `schedule({ ..., durable: DurableSchedules })`. Its factory only builds the backend; Redis is touched when the schedule plugin starts it."
+    },
+    {
+      "subpath": "./dot",
+      "name": "DurableSchedulerPluginOptions",
+      "kind": "type",
+      "signature": "export type DurableSchedulerPluginOptions = DurableSchedulerOptions & { readonly name?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "FeatureJobContext",
+      "kind": "type",
+      "signature": "export type FeatureJobContext<TServices> = { readonly services: TServices; };",
+      "jsdocSummary": "What a job declared in a feature's `jobs(...)` runs with, on top of the worker's `context` and the job: `services`, the services of the feature that registered it — its needs (an instance's rebound ones), infra, children's provides and `usecases`, without the kernel's `$` keys. Type the feature's jobs with it: `initQueue.context<WorkerContext & FeatureJobContext<Services>>().create()`."
+    },
+    {
+      "subpath": "./dot",
+      "name": "FeatureJobs",
+      "kind": "type",
+      "signature": "export type FeatureJobs<TRegistry extends QueueRegistry = QueueRegistry> = { readonly registry: TRegistry; /** What the feature's jobs see as `ctx.services` ({@link FeatureJobContext}). */ readonly services: object; };",
+      "jsdocSummary": "The payload of a feature's `jobs(...)` slice once the feature booted: its jobs and its services."
+    },
+    {
+      "subpath": "./dot",
+      "name": "JobProducer",
+      "kind": "type",
+      "signature": "export type JobProducer<TInput> = { enqueue(data: TInput, options?: TriggerOptions): Promise<JobTriggerResult>; };",
+      "jsdocSummary": "A job's producer on the Redis lane: enqueue under the feature's name for it (`send-mail#eu` in an instance)."
+    },
+    {
+      "subpath": "./dot",
+      "name": "jobProducers",
+      "kind": "function",
+      "signature": "export declare function jobProducers<const TJobs extends JobsRecord>(jobsToProduce: TJobs): Omit<import(\"@arki/dot/unit\").Unit<WireNeeds<{ queue: Service<QueueClient>; }>, import(\"@arki/dot/unit\").ProvidedValues<{ jobs: JobProducers<TJobs>; }>, { queue: Service<QueueClient>; }, \"job-producers\", import(\"@arki/dot/unit\").EmptyOwnership, import(\"@arki/dot/unit\").EmptyPhases>, \"factories\" | \"hooks\" | \"logging\"> & import(\"@arki/dot/unit\").LoggingSlot<import(\"@arki/dot/unit\").DotLoggingHandle<undefined>> & import(\"@arki/dot/unit\").FactoryContract<import(\"@arki/dot/unit\").ProvidedValues<{ jobs: JobProducers<TJobs>; }>> & { readonly factories: { readonly jobs: (ctx: never) => JobProducers<TJobs>; }; readonly hooks: import(\"@arki/dot/unit\").PhaseHooks<never, { readonly configure: undefined; readonly start: undefined; readonly stop: undefined; readonly dispose: undefined; }, import(\"@arki/dot/unit\").DotConfigureContext> & import(\"@arki/dot/unit\").BootSlot<CtxOf<{ queue: Service<QueueClient>; }> & import(\"@arki/dot/unit\").ProvidedValues<{ jobs: JobProducers<TJobs>; }> & import(\"@arki/dot/unit\").KernelCtx, undefined>; } & import(\"@arki/dot/unit\").InfraRole;",
+      "jsdocSummary": "A feature's producers on the Redis lane, as feature-private infra: `defineFeature('reports').needs({ queue: queuePlugin.provides.queue }).infra(jobProducers({ sendMail }))`, then `deps.jobs.sendMail.enqueue(data)` in a usecase. In an instance (`reports.instance('eu', …)`) it enqueues to `send-mail#eu`, the queue that instance's `jobs(...)` runs; in a plain feature to `send-mail`, exactly as `queue.enqueue(sendMail, data)`."
+    },
+    {
+      "subpath": "./dot",
+      "name": "JobProducers",
+      "kind": "type",
+      "signature": "export type JobProducers<TJobs> = { readonly [K in keyof TJobs]: JobProducer<InputOf<TJobs[K]>>; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "jobs",
+      "kind": "function",
+      "signature": "export declare function jobs<const TRegistry extends QueueRegistry>(registry: TRegistry): QueueFeatureSlice<TRegistry>;",
+      "jsdocSummary": "Declare a feature's jobs: `defineFeature('orders')….entrypoints(jobs(orderJobs))`. Each mounted copy of the feature runs them with its own services ({@link FeatureJobContext})."
+    },
+    {
+      "subpath": "./dot",
+      "name": "outboxJobs",
+      "kind": "function",
+      "signature": "export declare function outboxJobs<TNeeds extends NeedsShape & NoReservedKeys, TContext>(options: OutboxJobsOptions<TNeeds, TContext>): JobsSource<TNeeds>;",
+      "jsdocSummary": "Run every mounted feature's `jobs(...)` slice from the journal's jobs table: `.entrypoints(journalWorker({ listen, jobs: outboxJobs({ needs, context }) }))`. The same slice feeds Redis workers (`queueWorker`) and this runner; the worker's manifest lists `<job>.consume`."
+    },
+    {
+      "subpath": "./dot",
+      "name": "OutboxJobsOptions",
+      "kind": "type",
+      "signature": "export type OutboxJobsOptions<TNeeds extends NeedsShape, TContext> = { /** Services the job context is built from, besides `db`. Use `{}` for none. Missing ones fail boot. */ readonly needs: TNeeds; /** Build the job context. Runs once, on the first job, then cached (as `queueWorker`'s `context`). */ readonly context: (services: CtxOf<TNeeds> & { readonly db: RootDb; }) => TContext | Promise<TContext>; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "outboxPlugin",
+      "kind": "function",
+      "signature": "export declare function outboxPlugin(options: OutboxOptions): ReturnType<typeof createOutboxPlugin<'outbox'>>; ; export declare function outboxPlugin<N extends string>(options: OutboxOptions & { readonly name: N; }): ReturnType<typeof createOutboxPlugin<N>>;",
+      "jsdocSummary": "Provide the `schedule` service (`@arki/queue/outbox`): `schedule.runAfter(tx, job, args)` writes the job row in the caller's transaction. Opens nothing and needs nothing; mount it with `.infra()` in every process that schedules, and run the rows with `journalWorker({ jobs: outboxJobs(...) })`."
+    },
+    {
+      "subpath": "./dot",
+      "name": "OutboxPluginOptions",
+      "kind": "type",
+      "signature": "export type OutboxPluginOptions = OutboxOptions & { readonly name?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "OutboxProducer",
+      "kind": "type",
+      "signature": "export type OutboxProducer<TInput> = { runAfter(tx: OutboxTx, args: TInput, options?: ScheduleOptions): ReturnType<Outbox['runAfter']>; runAt(tx: OutboxTx, args: TInput, at: Date, options?: Omit<ScheduleOptions, 'delayMs'>): ReturnType<Outbox['runAt']>; };",
+      "jsdocSummary": "A job's producer on the outbox lane: a row in the caller's transaction, under the feature's name for it."
+    },
+    {
+      "subpath": "./dot",
+      "name": "outboxProducers",
+      "kind": "function",
+      "signature": "export declare function outboxProducers<const TJobs extends JobsRecord>(jobsToProduce: TJobs): Omit<import(\"@arki/dot/unit\").Unit<WireNeeds<{ schedule: Service<Outbox>; }>, import(\"@arki/dot/unit\").ProvidedValues<{ jobs: OutboxProducers<TJobs>; }>, { schedule: Service<Outbox>; }, \"outbox-producers\", import(\"@arki/dot/unit\").EmptyOwnership, import(\"@arki/dot/unit\").EmptyPhases>, \"factories\" | \"hooks\" | \"logging\"> & import(\"@arki/dot/unit\").LoggingSlot<import(\"@arki/dot/unit\").DotLoggingHandle<undefined>> & import(\"@arki/dot/unit\").FactoryContract<import(\"@arki/dot/unit\").ProvidedValues<{ jobs: OutboxProducers<TJobs>; }>> & { readonly factories: { readonly jobs: (ctx: never) => OutboxProducers<TJobs>; }; readonly hooks: import(\"@arki/dot/unit\").PhaseHooks<never, { readonly configure: undefined; readonly start: undefined; readonly stop: undefined; readonly dispose: undefined; }, import(\"@arki/dot/unit\").DotConfigureContext> & import(\"@arki/dot/unit\").BootSlot<CtxOf<{ schedule: Service<Outbox>; }> & import(\"@arki/dot/unit\").ProvidedValues<{ jobs: OutboxProducers<TJobs>; }> & import(\"@arki/dot/unit\").KernelCtx, undefined>; } & import(\"@arki/dot/unit\").InfraRole;",
+      "jsdocSummary": "A feature's producers on the outbox lane (`@arki/queue/outbox`), as feature-private infra: `.needs({ schedule: scheduling.provides.schedule }).infra(outboxProducers({ sendMail }))`, then `deps.jobs.sendMail.runAfter(tx, args)`. Rows carry the feature's name for the job (`send-mail#eu` in an instance), which `outboxJobs()` resolves to that instance's job. A feature mounts one of `jobProducers` and `outboxProducers`: both provide `jobs`."
+    },
+    {
+      "subpath": "./dot",
+      "name": "OutboxProducers",
+      "kind": "type",
+      "signature": "export type OutboxProducers<TJobs> = { readonly [K in keyof TJobs]: OutboxProducer<InputOf<TJobs[K]>>; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "queue",
+      "kind": "function",
+      "signature": "export declare function queue(options: QueueClientOptions): ReturnType<typeof createQueuePlugin<'queue'>>; ; export declare function queue<N extends string>(options: QueueClientOptions & { readonly name: N; }): ReturnType<typeof createQueuePlugin<N>>;",
+      "jsdocSummary": "Provide the `queue` client features enqueue with. Mount it with `.infra()`, before `.features()`. Its factory opens no connection: each job's BullMQ queue opens on its first `enqueue`. Stop closes them."
+    },
+    {
+      "subpath": "./dot",
+      "name": "QUEUE_ACTION_META_SCHEMA",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_ACTION_META_SCHEMA = \"@arki/queue/action-meta@1\";",
+      "jsdocSummary": "Marks a Dot action as one `@arki/queue` owns. Plain data: the portable `./projection` entry reads it without the Dot plugin."
+    },
+    {
+      "subpath": "./dot",
+      "name": "QUEUE_PLUGIN_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_PLUGIN_ERROR_CODES: { /** * The queue worker did not finish startup within the configured timeout. * @fix Check Redis connectivity and worker context creation; raise startupTimeoutMs only when startup legitimately needs longer. * @verify bun run test -- src/dot.spec.ts */ readonly startupTimeout: 'ARKI_QUEUE_E001'; /** * The queue worker was started while already running. * @fix Start the app once, or stop the queue worker before starting it again. * @verify bun run test -- src/dot.spec.ts */ readonly doubleStart: 'ARKI_QUEUE_E002'; /** * The queue worker was stopped before successful startup. * @fix Stop only after successful startup or let the Dot lifecycle manage shutdown. * @verify bun run test -- src/dot.spec.ts */ readonly stopBeforeStart: 'ARKI_QUEUE_E003'; /** * Queue worker startup has no mounted queue client. * @fix Mount queue({ connection }) before feature registration and queueWorker startup. * @verify bun run test -- src/dot.spec.ts */ readonly clientMissing: 'ARKI_QUEUE_E019'; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "queueActions",
+      "kind": "function",
+      "signature": "export declare function queueActions(registry: QueueRegistry): readonly QueueDotAction[];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueueClient",
+      "kind": "type",
+      "signature": "export type QueueClient = { /** Where this client enqueues. A worker that shares the client reads these. */ readonly connection: QueueConnection; readonly keyPrefix: string; /** * Add one job to its queue (returns the BullMQ job id), or start a flow: * validate `input` with the flow's schema, then add every step's job. */ enqueue: QueueEnqueue; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueueClientOptions",
+      "kind": "type",
+      "signature": "export type QueueClientOptions = { readonly connection: QueueConnection; /** Must match the worker's prefix. Defaults to `'queue:'`, the worker's default. */ readonly keyPrefix?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "queueConsumerActions",
+      "kind": "function",
+      "signature": "export declare function queueConsumerActions(registry: QueueRegistry): readonly QueueDotAction[];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueueDotAction",
+      "kind": "type",
+      "signature": "export type QueueDotAction = { readonly id: string; readonly binding: 'queue'; readonly direction: 'in' | 'out'; readonly address: string; readonly summary?: string; readonly metaSchema: typeof QUEUE_ACTION_META_SCHEMA; readonly meta: JsonObject; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueueFeatureSlice",
+      "kind": "type",
+      "signature": "export type QueueFeatureSlice<TRegistry extends QueueRegistry> = { /** Lets a `defineFeature` feature list it in `.entrypoints(...)`. */ readonly kind: 'queue'; readonly key: 'queue'; /** Empty: the producer ids need the feature's name, so they come from `actionsOf`. */ readonly actions: readonly QueueDotAction[]; /** The producer side, named after the feature: an instance's ids carry its instance (`send-mail#eu.produce`). */ readonly actionsOf: (feature: string) => readonly QueueDotAction[]; readonly registry: TRegistry; /** The registry it returns holds the same jobs, each wrapped to report to the handler observer. */ readonly resolve: (services: unknown) => FeatureJobs<TRegistry>; };",
+      "jsdocSummary": "The slice a `jobs(...)` declaration produces. The registry and the feature's services land under `queue` in the feature's slice record, where `queueWorker()` collects them. The slice's manifest actions are the PRODUCER side only (the feature can enqueue these jobs wherever it is mounted); the consumer side belongs to the worker, which exists only in the process that runs the jobs."
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueuePluginOptions",
+      "kind": "type",
+      "signature": "export type QueuePluginOptions = QueueClientOptions & { readonly name?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "queueProducerActions",
+      "kind": "function",
+      "signature": "export declare function queueProducerActions(registry: QueueRegistry): readonly QueueDotAction[];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueueRegistry",
+      "kind": "type",
+      "signature": "export type QueueRegistry = Record<string, unknown>;",
+      "jsdocSummary": "A nested record of definitions, as `queue.register()` and `jobs(...)` take it."
+    },
+    {
+      "subpath": "./dot",
+      "name": "queueWorker",
+      "kind": "function",
+      "signature": "export declare function queueWorker<TContext, TNeeds extends NeedsShape & NoReservedKeys>(options: QueueWorkerOptions<TNeeds, TContext>): EntrypointBinder<WireNeeds<WorkerShape<TNeeds>>, EmptyShape>;",
+      "jsdocSummary": "Run the jobs of every feature the app mounted. Mount it with `.entrypoints()`: it is bound to the app's features (each `jobs(...)` slice), uses the `queue` client's connection and key prefix, and owns the consumer side of the manifest (`<job>.consume`, `<schedule>.fire`)."
+    },
+    {
+      "subpath": "./dot",
+      "name": "QueueWorkerOptions",
+      "kind": "type",
+      "signature": "export type QueueWorkerOptions<TNeeds extends NeedsShape & NoReservedKeys, TContext> = { readonly name?: string; /** Services the job context is built from, besides the `queue` client. Use `{}` for none. */ readonly needs: TNeeds; readonly q: QueueBuilder<TContext, QueueMeta>; /** * Build the job context. Runs exactly ONCE, inside the guarded start: an * assembly failure (missing credentials) degrades boot like any other * startup failure instead of failing every job run, and an expensive * context graph is not rebuilt per execution. Per-run enrichment belongs * to job middleware. */ readonly context: (services: CtxOf<WorkerShape<TNeeds>>) => TContext | Promise<TContext>; readonly startupTimeoutMs?: number; /** Wait for the workers in `app.start()`. Default: start in the background. */ readonly blocking?: boolean; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./errors",
+      "name": "duplicateScheduleError",
+      "kind": "function",
+      "signature": "export declare function duplicateScheduleError(name: string): QueueDefinitionError;",
+      "jsdocSummary": "Two schedules share a name. The name is the job scheduler id, so the second would replace the first."
+    },
+    {
+      "subpath": "./errors",
+      "name": "JOB_TRIGGER_FAILURES",
+      "kind": "variable",
+      "signature": "export declare const JOB_TRIGGER_FAILURES: readonly [import(\"@arki/failure\").FailureDefinition<\"schema.invalid_input\", import(\"@standard-schema/spec\").StandardSchemaV1<unknown, { issues: readonly import(\"@standard-schema/spec\").StandardSchemaV1.Issue[]; }>>, import(\"@arki/failure\").FailureDefinition<\"schema.validator_defect\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>, import(\"@arki/failure\").FailureDefinition<\"contracts.random_source_unavailable\", undefined>, import(\"@arki/failure\").FailureDefinition<\"failure.unexpected_defect\", undefined>];",
+      "jsdocSummary": "Every failure a job trigger can return — spread it into a contract's error map."
+    },
+    {
+      "subpath": "./errors",
+      "name": "JobTriggerFailure",
+      "kind": "type",
+      "signature": "export type JobTriggerFailure = ReturnType<(typeof JOB_TRIGGER_FAILURES)[number]>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./errors",
+      "name": "QUEUE_DEFINITION_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_DEFINITION_ERROR_CODES: { /** * A job, schedule or flow definition has no name. * @fix Give the job, schedule or flow a non-empty name before building its definition. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly missingName: 'ARKI_QUEUE_E006'; /** * A handler was declared before its input schema. * @fix Call .input(schema) before defining the handler or building the declaration. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly missingInput: 'ARKI_QUEUE_E007'; /** * A flow definition has no steps. * @fix Add at least one .step(...) before building a flow. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly missingSteps: 'ARKI_QUEUE_E008'; /** * A flow step depends on an undeclared step. * @fix Reference only step ids declared in the same flow. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly unknownStepDependency: 'ARKI_QUEUE_E009'; /** * Flow step dependencies contain a cycle. * @fix Remove dependency cycles so the flow steps form a directed acyclic graph. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly circularStepDependency: 'ARKI_QUEUE_E010'; /** * A cron interval or time is outside its supported range. * @fix Pass cron intervals and times within the helper limits stated by the error. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly invalidCronValue: 'ARKI_QUEUE_E011'; /** * A schedule wrapping a job declares schedule-level middleware. * @fix Remove schedule-level .use() when wrapping a job; put middleware on the job instead. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly scheduleMiddlewareWithJob: 'ARKI_QUEUE_E012'; /** * Two schedules use the same name. * @fix Give each schedule a distinct .name(...), including schedules wrapping the same job. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly duplicateScheduleName: 'ARKI_QUEUE_E013'; /** * A flow step has more than one dependent. * @fix Reshape the flow so a step has at most one dependent; use a supported dependency tree. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly stepWithManyDependents: 'ARKI_QUEUE_E017'; /** * A job name contains characters unsupported by the queue backend. * @fix Rename the job with only letters, digits and _ - . / (for example \"orders.process\"); a job name is its queue name, and BullMQ and pg-boss reject other characters such as \":\". * @verify bun run test -- src/builder-guards.spec.ts */ readonly invalidJobName: 'ARKI_QUEUE_E020'; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./errors",
+      "name": "QUEUE_INPUT_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_INPUT_ERROR_CODES: { /** * The enqueue input does not satisfy the flow input schema. * @fix Pass enqueue input accepted by the declared flow input schema. * @verify bun run test -- src/builder-guards.spec.ts src/flow-builder.spec.ts */ readonly invalidFlowInput: 'ARKI_QUEUE_E018'; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./errors",
+      "name": "QueueAcceptanceUnknown",
+      "kind": "variable",
+      "signature": "export declare const QueueAcceptanceUnknown: import(\"@arki/failure\").FailureDefinition<\"queue.acceptance_unknown\", undefined>;",
+      "jsdocSummary": "The queue could not confirm whether the job was accepted."
+    },
+    {
+      "subpath": "./errors",
+      "name": "QueueDefinitionError",
+      "kind": "class",
+      "signature": "export declare class QueueDefinitionError extends Error { readonly code: (typeof QUEUE_DEFINITION_ERROR_CODES)[keyof typeof QUEUE_DEFINITION_ERROR_CODES]; readonly remediation: string; constructor(args: { readonly code: (typeof QUEUE_DEFINITION_ERROR_CODES)[keyof typeof QUEUE_DEFINITION_ERROR_CODES]; readonly message: string; readonly remediation: string; }); }",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./errors",
+      "name": "QueueInputError",
+      "kind": "class",
+      "signature": "export declare class QueueInputError extends Error { readonly code: (typeof QUEUE_INPUT_ERROR_CODES)[keyof typeof QUEUE_INPUT_ERROR_CODES]; readonly remediation: string; constructor(args: { readonly code: (typeof QUEUE_INPUT_ERROR_CODES)[keyof typeof QUEUE_INPUT_ERROR_CODES]; readonly message: string; readonly remediation: string; readonly cause: unknown; }); }",
+      "jsdocSummary": "Data handed to `enqueue()` failed its schema. Thrown before anything is written to Redis, so no part of the flow starts. `cause` is the schema error."
+    },
+    {
+      "subpath": "./errors",
+      "name": "QueueUnavailable",
+      "kind": "variable",
+      "signature": "export declare const QueueUnavailable: import(\"@arki/failure\").FailureDefinition<\"queue.unavailable\", undefined>;",
+      "jsdocSummary": "The job has no active queue transport."
+    },
+    {
+      "subpath": "./errors",
+      "name": "QueueWorkerStartFailed",
+      "kind": "variable",
+      "signature": "export declare const QueueWorkerStartFailed: import(\"@arki/failure\").FailureDefinition<\"queue.worker_start_failed\", undefined>;",
+      "jsdocSummary": "The queue worker started in the background and failed (Redis down, a slow start, a context factory that threw), so no job runs."
+    },
+    {
+      "subpath": "./foreman",
+      "name": "bullmqFailedJobSource",
+      "kind": "function",
+      "signature": "export declare function bullmqFailedJobSource(options: BullMQFailedJobSourceOptions): FailedJobSource;",
+      "jsdocSummary": "Failed jobs of a BullMQ queue."
+    },
+    {
+      "subpath": "./foreman",
+      "name": "BullMQFailedJobSourceOptions",
+      "kind": "type",
+      "signature": "export type BullMQFailedJobSourceOptions = { /** * The BullMQ queue to read. Pass a function when the queue is created lazily * (for example `() => instance.queues().get('story-generation')`). */ queue: Queue | (() => Queue | Promise<Queue>); };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./foreman",
+      "name": "FailedJobRecord",
+      "kind": "type",
+      "signature": "export type FailedJobRecord = { id: string; /** The job (queue) name. */ name: string; /** External stable key, when it differs from the native provider identity. */ key?: string; attempts: number; /** The raw last error message. The module redacts it before it leaves the app. */ error: string | null; failedAt: Date; /** Changes whenever the job fails again or leaves the failed state. */ revision: string; };",
+      "jsdocSummary": "One failed job, as a queue backend reports it."
+    },
+    {
+      "subpath": "./foreman",
+      "name": "failedJobSchema",
+      "kind": "variable",
+      "signature": "export declare const failedJobSchema: z.ZodObject<{ id: z.ZodString; queue: z.ZodString; name: z.ZodString; key: z.ZodOptional<z.ZodString>; attempts: z.ZodNumber; error: z.ZodNullable<z.ZodString>; failedAt: z.ZodISODateTime; }, z.core.$strict>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./foreman",
+      "name": "FailedJobSource",
+      "kind": "type",
+      "signature": "export type FailedJobSource = { /** Failed jobs, newest first, plus the total count. */ listFailed(page: { limit: number; offset: number; }): Promise<{ jobs: FailedJobRecord[]; total: number; }>; /** The job if it is failed right now; `undefined` when it is gone or already re-queued. */ getFailed(id: string): Promise<FailedJobRecord | undefined>; /** * Re-queue the job only while it is still failed with `expectedRevision`, in one atomic step. * Returns `false` when it no longer matches, so nothing was written. */ retryFailed(id: string, expectedRevision: string): Promise<boolean>; };",
+      "jsdocSummary": "What the Foreman module needs from one queue backend. `pgBossFailedJobSource` implements it for runtime-local (pg-boss on PGlite)."
+    },
+    {
+      "subpath": "./foreman",
+      "name": "pgBossFailedJobSource",
+      "kind": "function",
+      "signature": "export declare function pgBossFailedJobSource(options: PgBossFailedJobSourceOptions): FailedJobSource;",
+      "jsdocSummary": "Failed jobs of a runtime-local queue (pg-boss on PGlite), read straight from the pg-boss job table. Retry is one conditional UPDATE that mirrors pg-boss `retry()` (failed -> retry, one more attempt allowed) but only fires while the row still has the revision the approval pinned. That makes a duplicate retry atomic."
+    },
+    {
+      "subpath": "./foreman",
+      "name": "PgBossFailedJobSourceOptions",
+      "kind": "type",
+      "signature": "export type PgBossFailedJobSourceOptions = { pglite: PGlite; /** The pg-boss schema the queue instance runs in. Defaults to the runtime-local default. */ schema?: string; /** Scope lookups and displayed ids to one job namespace, retaining its external stable keys. */ name?: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./foreman",
+      "name": "QUEUE_FOREMAN_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_FOREMAN_ERROR_CODES: { /** The job changed since the preview the approval pinned (it failed again, or was touched). HTTP 409. * @fix Refresh the failed-job preview and obtain approval for its current revision. * @verify bun run test -- src/foreman/foreman.spec.ts */ readonly staleRevision: 'ARKI_QUEUE_E014'; /** The job is no longer failed: it was already re-queued, or it is gone. HTTP 409. * @fix Refresh the job state and select an existing failed job before retrying. * @verify bun run test -- src/foreman/foreman.spec.ts */ readonly notFailed: 'ARKI_QUEUE_E015'; /** The module has no queue under that key. HTTP 404. * @fix Use a queue key registered by the module. * @verify bun run test -- src/foreman/foreman.spec.ts */ readonly unknownQueue: 'ARKI_QUEUE_E016'; };",
+      "jsdocSummary": "Coded failures of the Foreman retry action. Match on `code`, never on the message. Thrown as `ModuleError`s (`moduleError` from `@arki/admin/module`), so Foreman answers each with its own HTTP status."
+    },
+    {
+      "subpath": "./foreman",
+      "name": "QueueForemanErrorCode",
+      "kind": "type",
+      "signature": "export type QueueForemanErrorCode = (typeof QUEUE_FOREMAN_ERROR_CODES)[keyof typeof QUEUE_FOREMAN_ERROR_CODES];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./foreman",
+      "name": "queueForemanModule",
+      "kind": "function",
+      "signature": "export declare function queueForemanModule(options: QueueForemanOptions): import(\"@arki/admin/module\").ForemanModule<Record<string, never>, { failedJobs: import(\"@arki/admin/module\").Read<z.ZodObject<{ queue: z.ZodOptional<z.ZodString>; limit: z.ZodDefault<z.ZodNumber>; offset: z.ZodDefault<z.ZodNumber>; }, z.core.$strict>, z.ZodObject<{ jobs: z.ZodArray<z.ZodObject<{ id: z.ZodString; queue: z.ZodString; name: z.ZodString; key: z.ZodOptional<z.ZodString>; attempts: z.ZodNumber; error: z.ZodNullable<z.ZodString>; failedAt: z.ZodISODateTime; }, z.core.$strict>>; total: z.ZodNumber; nextOffset: z.ZodNullable<z.ZodNumber>; }, z.core.$strict>, Record<string, never>>; }, { retryJob: import(\"@arki/admin/module\").Action<z.ZodObject<{ queue: z.ZodString; jobId: z.ZodString; }, z.core.$strict>, z.ZodObject<{ revision: z.ZodString; queue: z.ZodString; jobId: z.ZodString; name: z.ZodString; key: z.ZodOptional<z.ZodString>; attempts: z.ZodNumber; consequence: z.ZodString; }, z.core.$strict>, z.ZodObject<{ requeued: z.ZodLiteral<true>; jobId: z.ZodString; }, z.core.$strict>, Record<string, never>, readonly [], { requeued: true; jobId: string; }>; }>;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./foreman",
+      "name": "QueueForemanOptions",
+      "kind": "type",
+      "signature": "export type QueueForemanOptions = { /** The queues Foreman may see, by a stable key. Each key is one queue instance's failed-job source. */ queues: Readonly<Record<string, FailedJobSource>>; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./foreman",
+      "name": "redactSecrets",
+      "kind": "function",
+      "signature": "export declare function redactSecrets(message: string): string;",
+      "jsdocSummary": "Strips credentials from an error message and caps its length. The message is shown in Foreman, so it must not leak secrets."
+    },
+    {
+      "subpath": "./outbox",
+      "name": "isOutboxError",
+      "kind": "function",
+      "signature": "export declare function isOutboxError(error: unknown): error is OutboxError;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "outbox",
+      "kind": "function",
+      "signature": "export declare function outbox(options: OutboxOptions): Outbox;",
+      "jsdocSummary": "The scheduling entry point. Build it once per app: `export const schedule = outbox({ tables })`."
+    },
+    {
+      "subpath": "./outbox",
+      "name": "Outbox",
+      "kind": "type",
+      "signature": "export type Outbox = { runAfter<TInput, TOutput, TContext>(tx: OutboxTx, job: JobDefinition<TInput, TOutput, TContext>, args: NoInfer<TInput>, options?: ScheduleOptions): Promise<Scheduled | AsyncSchemaFailure | IdGenerationFailure>; runAt<TInput, TOutput, TContext>(tx: OutboxTx, job: JobDefinition<TInput, TOutput, TContext>, args: NoInfer<TInput>, at: Date, options?: Omit<ScheduleOptions, 'delayMs'>): Promise<Scheduled | AsyncSchemaFailure | IdGenerationFailure>; /** Delete a row no worker holds. `false` when it is running, finished, or never existed. */ cancel(tx: DbHandle, id: string): Promise<boolean>; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "OUTBOX_ERROR_CODES",
+      "kind": "variable",
+      "signature": "export declare const OUTBOX_ERROR_CODES: { /** * An outbox write was attempted outside the business transaction. * @fix Call runAfter or runAt inside db.transaction and pass the business transaction handle. * @verify bun run test -- src/outbox/outbox.spec.ts */ readonly notInTransaction: 'OUTBOX_E001'; /** * The outbox arguments do not satisfy the job input schema. * @fix Pass args accepted by the job input schema; inspect the private schema issues. * @verify bun run test -- src/outbox/outbox.spec.ts */ readonly badArgs: 'OUTBOX_E002'; /** * The outbox delay, scheduled time or priority is invalid. * @fix Use a non-negative safe-integer delay, a valid runAt Date and a supported QUEUE_PRIORITIES value. * @verify bun run test -- src/outbox/outbox.spec.ts */ readonly badTiming: 'OUTBOX_E004'; /** * Stored outbox arguments do not satisfy the registered job input schema. * @fix Repair the stored args or restore the matching job schema before retrying the dead row; version job names when inputs change. * @verify bun run test -- src/outbox/outbox.spec.ts */ readonly badStoredArgs: 'OUTBOX_E005'; /** * An outbox row names a job absent from the runner registry. * @fix Register the job in the registry used to construct the outbox runner. * @verify bun run test -- src/outbox/outbox.spec.ts */ readonly unknownJob: 'OUTBOX_E006'; /** * Two jobs in the outbox registry use the same name. * @fix Give each job in the outbox registry a unique name. * @verify bun run test -- src/outbox/outbox.spec.ts */ readonly duplicateName: 'OUTBOX_E007'; };",
+      "jsdocSummary": "Outbox errors: plain `Error`s with a stable `code` and a `remediation`. Every one is an app bug (a wrong call, a bad stored row), so none is a typed client error."
+    },
+    {
+      "subpath": "./outbox",
+      "name": "OutboxError",
+      "kind": "type",
+      "signature": "export type OutboxError = Error & { readonly code: OutboxErrorCode; readonly remediation: string; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "OutboxErrorCode",
+      "kind": "type",
+      "signature": "export type OutboxErrorCode = (typeof OUTBOX_ERROR_CODES)[keyof typeof OUTBOX_ERROR_CODES];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "OutboxOptions",
+      "kind": "type",
+      "signature": "export type OutboxOptions = { /** The journal tables of the app (`journalTables(schema?)`); only `jobs` is written. */ readonly tables: Pick<JournalTables, 'jobs'>; /** UTF-8 bytes of `JSON.stringify(args)`. Default 262_144 (256 KiB). */ readonly maxArgsBytes?: number; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "outboxRunner",
+      "kind": "function",
+      "signature": "export declare function outboxRunner<TContext>(options: OutboxRunnerOptions<TContext>): JobRunner;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "OutboxRunnerOptions",
+      "kind": "type",
+      "signature": "export type OutboxRunnerOptions<TContext> = { /** The same nested registry `queue.register()` and `jobs(...)` take. */ readonly registry: QueueRegistry; /** Built once, on the first run, then cached (same rule as `queueWorker`'s `context`). A failure is not cached. */ readonly context: () => TContext | Promise<TContext>; /** The services each top-level branch of the registry runs with, by its key (`RegisterOptions.services`). */ readonly services?: Readonly<Record<string, object>>; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./outbox",
+      "name": "OutboxTx",
+      "kind": "type",
+      "signature": "export type OutboxTx = DbHandle & { rollback(): never; };",
+      "jsdocSummary": "A Drizzle transaction or savepoint. A root database has no `rollback`, so it does not fit."
+    },
+    {
+      "subpath": "./outbox",
+      "name": "QueueRegistry",
+      "kind": "type",
+      "signature": "export type QueueRegistry = Record<string, unknown>;",
+      "jsdocSummary": "A nested record of definitions, as `queue.register()` and `jobs(...)` take it."
+    },
+    {
+      "subpath": "./outbox",
+      "name": "Scheduled",
+      "kind": "type",
+      "signature": "export type Scheduled = { readonly id: string; readonly deduplicated: boolean; };",
+      "jsdocSummary": "`id` is the job id (`job_xxx`), provisional until the caller's transaction commits."
+    },
+    {
+      "subpath": "./outbox",
+      "name": "ScheduleOptions",
+      "kind": "type",
+      "signature": "export type ScheduleOptions = { /** Due this long after the transaction's `now()`. Default 0. Non-negative safe integer. */ readonly delayMs?: number; /** Dedupes among unfinished rows (pending, running, dead) of the same job, like `TriggerOptions.jobId`. */ readonly key?: string; /** Same scale as `trigger`: 1 critical … 10 background. Default NORMAL (5). */ readonly priority?: QueuePriority; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./projection",
+      "name": "project",
+      "kind": "function",
+      "signature": "export declare function project(manifest: ManifestLike): QueueTopologyDocument;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./projection",
+      "name": "QueueTopologyDocument",
+      "kind": "type",
+      "signature": "export type QueueTopologyDocument = { readonly format: 'queue-topology'; readonly queues: readonly { readonly name: string; readonly consumers: readonly { readonly id: string; readonly plugin: string; }[]; readonly producers: readonly { readonly id: string; readonly plugin: string; }[]; }[]; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./runtime-local",
+      "name": "createRuntimeLocalQueueInstance",
+      "kind": "function",
+      "signature": "export declare function createRuntimeLocalQueueInstance<TContext>(options: RuntimeLocalQueueInstanceOptions<TContext>): QueueInstance;",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./runtime-local",
+      "name": "initQueue",
+      "kind": "variable",
+      "signature": "export declare const initQueue: { /** * Configure context type for the queue */ context<TContext>(): { /** * Configure metadata type for the queue */ meta<TMeta extends QueueMeta>(): { /** * Create the queue builder with configuration */ create(config?: Partial<QueueConfig>): QueueBuilder<TContext, TMeta>; }; /** * Create the queue builder without metadata */ create(config?: Partial<QueueConfig>): QueueBuilder<TContext, QueueMeta>; }; /** * Create the queue builder without context or metadata */ create<TContext = Record<string, never>>(config?: Partial<QueueConfig>): QueueBuilder<TContext, QueueMeta>; };",
+      "jsdocSummary": "Initialize queue system This is the entry point, similar to tRPC's initTRPC"
+    },
+    {
+      "subpath": "./runtime-local",
+      "name": "RuntimeLocalQueueInstanceOptions",
+      "kind": "type",
+      "signature": "export type RuntimeLocalQueueInstanceOptions<TContext> = { pglite: PGlite; schema?: string; createContext: () => TContext | Promise<TContext>; /** How often pg-boss recovers abandoned claims. Default 60 seconds. */ superviseIntervalSeconds?: number; /** Queue expiry/retention maintenance cadence. Default 60 seconds. */ maintenanceIntervalSeconds?: number; /** Native expiry/heartbeat monitoring claim cadence. Default 60 seconds. */ monitorIntervalSeconds?: number; };",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./types",
+      "name": "BullMQQueueInstance",
+      "kind": "type",
+      "signature": "export type BullMQQueueInstance = QueueInstance & { /** The BullMQ `Queue` of every registered job, by queue name. Empty until `register()` runs. */ queues(): ReadonlyMap<string, Queue>; /** Add a registered job (like its `trigger()`), or start a flow. */ enqueue: QueueEnqueue; };",
+      "jsdocSummary": "The BullMQ-backed queue instance. Adds a read-only view of its BullMQ queues, for tools that read job state (for example the Foreman failed-job source). The runtime-local instance is a plain `QueueInstance`."
+    },
+    {
+      "subpath": "./types",
+      "name": "ComputeFinalContext",
+      "kind": "type",
+      "signature": "export type ComputeFinalContext<TInitialContext, TMiddlewares extends readonly unknown[]> = TMiddlewares extends readonly [] ? TInitialContext : TMiddlewares extends readonly [infer First, ...infer Rest] ? First extends JobMiddleware<unknown, infer TOut, QueueMeta> ? ComputeFinalContext<TOut, Rest> : TInitialContext : TInitialContext;",
+      "jsdocSummary": "Compute the final context type from a middleware chain This type helper recursively processes middleware to determine the final output context"
+    },
+    {
+      "subpath": "./types",
+      "name": "DataTransformer",
+      "kind": "type",
+      "signature": "export type DataTransformer = { serialize: (data: unknown) => unknown; deserialize: (data: unknown) => unknown; };",
+      "jsdocSummary": "Data transformer Used to serialize/deserialize job data"
+    },
+    {
+      "subpath": "./types",
+      "name": "ErrorFormatter",
+      "kind": "type",
+      "signature": "export type ErrorFormatter<TError = Error> = (error: TError) => unknown;",
+      "jsdocSummary": "Error formatter function"
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowBuilderFactory",
+      "kind": "type",
+      "signature": "export type FlowBuilderFactory<TContext, TMeta extends QueueMeta> = { /** * Create a new flow builder */ name(name: string): FlowBuilderStart<TContext, TMeta>; };",
+      "jsdocSummary": "Flow builder factory"
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowBuilderNeedsStep",
+      "kind": "type",
+      "signature": "export type FlowBuilderNeedsStep<TContext, TMeta extends QueueMeta, TInput> = { /** * Add the first step to the flow (unlocks `.build()`) */ step<const TId extends string, TStepInput>(id: TId, config: { /** Any built job: a step job runs on its own worker, with its own middleware and context. */ job: JobDefinition<TStepInput, unknown, never>; /** Maps the flow input to the step job's input. */ data: (input: TInput) => NoInfer<TStepInput>; /** BullMQ options for this step's job, over the job's own defaults (retry, `bullmqOptions`). */ opts?: FlowStepOptions; /** Steps that must finish first. Each step may be in the `dependsOn` of at most one other step. */ dependsOn?: readonly string[]; }): FlowBuilderWithInput<TContext, TMeta, TInput>; };",
+      "jsdocSummary": "Flow builder after input is set, before the first step. Has no `.build()`: building a flow with no steps is a compile error."
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowBuilderStart",
+      "kind": "type",
+      "signature": "export type FlowBuilderStart<TContext, TMeta extends QueueMeta> = { /** * Set input schema */ input<TInput>(schema: StandardSchemaV1<unknown, TInput>): FlowBuilderNeedsStep<TContext, TMeta, TInput>; };",
+      "jsdocSummary": "Flow builder start - after name is set"
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowBuilderWithInput",
+      "kind": "type",
+      "signature": "export type FlowBuilderWithInput<TContext, TMeta extends QueueMeta, TInput> = { /** * Add a step to the flow */ step<const TId extends string, TStepInput>(id: TId, config: { /** Any built job: a step job runs on its own worker, with its own middleware and context. */ job: JobDefinition<TStepInput, unknown, never>; /** Maps the flow input to the step job's input. */ data: (input: TInput) => NoInfer<TStepInput>; /** BullMQ options for this step's job, over the job's own defaults (retry, `bullmqOptions`). */ opts?: FlowStepOptions; /** Steps that must finish first. Each step may be in the `dependsOn` of at most one other step. */ dependsOn?: readonly string[]; }): FlowBuilderWithInput<TContext, TMeta, TInput>; /** * Build the final flow definition */ build(): FlowDefinition<TInput>; };",
+      "jsdocSummary": "Flow builder with input and at least one step - can add steps and build. Flows have no `.use()`: each step runs in its own job's worker, with that job's middleware."
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowDefinition",
+      "kind": "type",
+      "signature": "export type FlowDefinition<TInput = unknown> = { _type: 'flow'; _internal: unknown; /** Type-only: carries the input type so `enqueue(flow, input)` infers it. Never set at runtime. */ readonly _input?: TInput; };",
+      "jsdocSummary": "Flow definition. Start one with `enqueue(flow, input)`."
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowEnqueueResult",
+      "kind": "type",
+      "signature": "export type FlowEnqueueResult = { readonly flow: string; readonly jobIds: Readonly<Record<string, string>>; };",
+      "jsdocSummary": "What `enqueue(flow, input)` created: the BullMQ job id of every step, by step id."
+    },
+    {
+      "subpath": "./types",
+      "name": "FlowStepOptions",
+      "kind": "type",
+      "signature": "export type FlowStepOptions = Omit<JobsOptions, 'parent' | 'repeat' | 'deduplication' | 'attempts' | 'backoff'>;",
+      "jsdocSummary": "BullMQ options of one flow step's job. `parent` and `repeat` are owned by the flow (the tree sets parents; a flow step does not repeat)."
+    },
+    {
+      "subpath": "./types",
+      "name": "JobBuilderChain",
+      "kind": "type",
+      "signature": "export type JobBuilderChain<TContext, TContextOut, TMeta extends QueueMeta, TInput, TOutput, TFailure extends Failure = never> = { /** * Set input schema */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): JobBuilderChain<TContext, TContextOut, TMeta, TNewInput, TOutput, TFailure>; /** * Set job options */ options(options: JobOptions): JobBuilderChain<TContext, TContextOut, TMeta, TInput, TOutput, TFailure>; /** * Set handler function (completes the builder) */ handler<TResult>(handler: (data: TInput, ctx: TContextOut) => Promise<TResult>): JobDefinition<TInput, TResult | TFailure, TContextOut>; };",
+      "jsdocSummary": "Job builder chain - after name and input are set"
+    },
+    {
+      "subpath": "./types",
+      "name": "JobBuilderDef",
+      "kind": "type",
+      "signature": "export type JobBuilderDef<TContext, TContextOut, TMeta extends QueueMeta, TFailure extends Failure = never> = { /** * Add a `step(fn)`: the job's context gains what the step returns, and the * step's refusals join the job's result. The job's context must have the * keys the step reads. */ use<TIn, TAdded extends object, TRefused extends Failure>(middleware: StepJobMiddleware<TIn, TAdded, TRefused> & FitsContext<TContextOut, TIn>): JobBuilderDef<TContext, TContextOut & TAdded, TMeta, TFailure | TRefused>; /** Add an `around(fn)`: wraps later steps and the handler; the context is unchanged. */ use<TIn>(middleware: AroundJobMiddleware<TIn> & FitsContext<TContextOut, TIn>): JobBuilderDef<TContext, TContextOut, TMeta, TFailure>; /** * Add middleware to this job builder * Middleware can transform context, add logging, handle errors, etc. */ use<TContextOut2, TNextFailure extends Failure = never>(middleware: JobMiddleware<TContextOut, TContextOut2, TMeta, TNextFailure> & { readonly _adapter?: never; }): JobBuilderDef<TContext, TContextOut2, TMeta, TFailure | TNextFailure>; /** * Set the job name (starts the chainable builder) */ name(name: string): JobBuilderNeedsInput<TContext, TContextOut, TMeta, TFailure>; };",
+      "jsdocSummary": "Job builder definition - chainable builder for creating jobs Similar to tRPC's procedure builder"
+    },
+    {
+      "subpath": "./types",
+      "name": "JobBuilderNeedsInput",
+      "kind": "type",
+      "signature": "export type JobBuilderNeedsInput<TContext, TContextOut, TMeta extends QueueMeta, TFailure extends Failure = never> = { /** * Set input schema (unlocks `.handler()`) */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): JobBuilderChain<TContext, TContextOut, TMeta, TNewInput, never, TFailure>; /** * Set job options */ options(options: JobOptions): JobBuilderNeedsInput<TContext, TContextOut, TMeta, TFailure>; };",
+      "jsdocSummary": "Job builder after name is set, before input is set. Has no `.handler()`: calling it here is a compile error (\"Call .input() first\")."
+    },
+    {
+      "subpath": "./types",
+      "name": "JobContext",
+      "kind": "type",
+      "signature": "export type JobContext<TDeps = Record<string, never>> = { /** * Update job progress (0-100) */ updateProgress: (progress: number) => Promise<void>; /** * Log a message for this job */ log: (message: string) => Promise<void>; /** * The job that runs: a BullMQ `Job`, or the same shape from another lane */ job: JobLike; /** Cooperative cancellation; honor it before starting further side effects. */ signal: AbortSignal; } & TDeps;",
+      "jsdocSummary": "Context provided to job handlers"
+    },
+    {
+      "subpath": "./types",
+      "name": "JobDefinition",
+      "kind": "type",
+      "signature": "export type JobDefinition<TInput, TOutput, TDeps = Record<string, never>> = { _type: 'job'; _internal: InternalJobDefinition<TInput, TOutput, TDeps>; /** * Trigger a job with the given input data * @param data - Input data for the job * @param options - Optional trigger options (priority, delay, etc.) * @returns Promise resolving to the job ID */ trigger: (data: TInput, options?: TriggerOptions) => Promise<JobTriggerResult>; };",
+      "jsdocSummary": "Job definition created by job builder"
+    },
+    {
+      "subpath": "./types",
+      "name": "JobHandler",
+      "kind": "type",
+      "signature": "export type JobHandler<TInput, TOutput, TDeps = Record<string, never>> = (data: TInput, ctx: JobContext<TDeps>) => Promise<TOutput>;",
+      "jsdocSummary": "Handler function for processing jobs"
+    },
+    {
+      "subpath": "./types",
+      "name": "JobLike",
+      "kind": "type",
+      "signature": "export type JobLike = { /** The job id. Stable across retries: pass it on as an idempotency key. */ readonly id?: string; readonly name: string; /** The stored input, before the schema parsed it. */ readonly data: unknown; /** Tries that failed before this one: 0 on the first try. */ readonly attemptsMade: number; updateProgress(progress: number): Promise<unknown>; log(message: string): Promise<unknown>; };",
+      "jsdocSummary": "What a handler and its middleware see of the job that runs. A BullMQ `Job` fits, and so do the runtime-local queue's job and an outbox row (`@arki/queue/outbox`)."
+    },
+    {
+      "subpath": "./types",
+      "name": "JobMiddleware",
+      "kind": "type",
+      "signature": "export type JobMiddleware<TContextOut1, TContextOut2, TMeta extends QueueMeta, TFailure = never> = { _type: 'middleware'; _fn: MiddlewareFunction<TContextOut1, TContextOut2, TMeta, TFailure>; };",
+      "jsdocSummary": "Job middleware wrapper Contains the middleware function and type information"
+    },
+    {
+      "subpath": "./types",
+      "name": "JobOptions",
+      "kind": "type",
+      "signature": "export type JobOptions = { maxParallelism?: number; /** Abort the handler signal after this duration. Settlement waits for owned work to finish. */ timeoutMs?: number; /** Native abandoned-claim supervision for the pg-boss lane. Handler retry uses `retry`. */ runtimeLocalOptions?: Pick<PgBossQueueOptions, 'expireInSeconds' | 'heartbeatSeconds'>; /** * When a failed job runs again, and how long it waits first: a `backoff` from * `@arki/resilience` (re-exported here). Default: `backoff.exponential({ base: 1000 }).upTo(2)`, * so 3 tries in all, 1 s and then 2 s apart. */ retry?: Backoff; /** * How long the journal keeps this job's finished and dead rows when it runs through the outbox. * Overrides the journal's retention for this job name. The BullMQ lane ignores it. */ retention?: EffectRetention; bullmqOptions?: Partial<Omit<JobsOptions, 'attempts' | 'backoff'>>; workerOptions?: Partial<WorkerOptions>; };",
+      "jsdocSummary": "Options for job definitions"
+    },
+    {
+      "subpath": "./types",
+      "name": "MiddlewareChainContext",
+      "kind": "type",
+      "signature": "export type MiddlewareChainContext<TContext, TMiddlewares extends readonly JobMiddleware<unknown, unknown, QueueMeta>[]> = TMiddlewares extends readonly [infer First, ...infer Rest] ? First extends JobMiddleware<unknown, infer TOut, QueueMeta> ? Rest extends readonly JobMiddleware<unknown, unknown, QueueMeta>[] ? MiddlewareChainContext<TOut, Rest> : TOut : TContext : TContext;",
+      "jsdocSummary": "Helper type for middleware chain Computes the final context type after applying a chain of middleware"
+    },
+    {
+      "subpath": "./types",
+      "name": "MiddlewareContext",
+      "kind": "type",
+      "signature": "export type MiddlewareContext<T> = T extends JobMiddleware<unknown, infer TContextOut, QueueMeta> ? TContextOut : never;",
+      "jsdocSummary": "Helper type to extract context type from middleware"
+    },
+    {
+      "subpath": "./types",
+      "name": "MiddlewareFunction",
+      "kind": "type",
+      "signature": "export type MiddlewareFunction<TContextOut1, TContextOut2, TMeta extends QueueMeta, TFailure = never> = (opts: { /** * Current context (from previous middleware or base context) */ ctx: TContextOut1; /** * Job data */ data: unknown; /** * The job that runs: a BullMQ `Job`, or the same shape from another lane */ job: JobLike; /** * Metadata (can be used for tracking, logging, etc.) */ meta: TMeta; /** * Call the next middleware, or the handler after the last one. * Resolves only once everything inside has finished, handler included, and * rejects with the handler's error, so `try { return await next() } finally { ... }` * wraps the handler. Can optionally replace the context for what follows. */ next: (opts?: { ctx?: TContextOut2; }) => Promise<MiddlewareResult<TContextOut2>>; }) => Promise<MiddlewareResult<TContextOut2> | TFailure>;",
+      "jsdocSummary": "Middleware function signature Similar to tRPC middleware but adapted for job processing"
+    },
+    {
+      "subpath": "./types",
+      "name": "MiddlewareResult",
+      "kind": "type",
+      "signature": "export type MiddlewareResult<TContext> = { /** * The context to pass to the next middleware/handler */ ctx: TContext; /** * What the handler returned, as seen from `await next()`. * Unset when a middleware returns without calling `next()`. */ readonly output?: unknown; };",
+      "jsdocSummary": "Result from middleware execution"
+    },
+    {
+      "subpath": "./types",
+      "name": "QUEUE_PRIORITIES",
+      "kind": "variable",
+      "signature": "export declare const QUEUE_PRIORITIES: { readonly CRITICAL: 1; readonly HIGH: 3; readonly NORMAL: 5; readonly LOW: 7; readonly BACKGROUND: 10; };",
+      "jsdocSummary": "Standard priority levels for jobs"
+    },
+    {
+      "subpath": "./types",
+      "name": "QueueBuilder",
+      "kind": "type",
+      "signature": "export type QueueBuilder<TContext, TMeta extends QueueMeta = QueueMeta> = { /** * The configuration used to create this builder */ readonly _config: QueueConfig; /** * Base job builder with no middleware * Similar to tRPC's base procedure * Output context is JobContext<TContext> because runtime wraps user context */ readonly job: JobBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Create middleware for jobs * * By default, middleware maintains JobContext<TContext> as both input and output. * Provide explicit type parameters to transform context: * - middleware<MyContextIn, MyContextOut>(...) for full control * - middleware<MyContext>(...) to use same type for input and output */ middleware: { <TContextIn = JobContext<TContext>, TContextOut = TContextIn>(fn: MiddlewareFunction<TContextIn, TContextOut, TMeta>): JobMiddleware<TContextIn, TContextOut, TMeta>; <TContextIn = JobContext<TContext>, TContextOut = TContextIn, TFailure extends Failure = never>(fn: MiddlewareFunction<TContextIn, TContextOut, TMeta, TFailure>): JobMiddleware<TContextIn, TContextOut, TMeta, TFailure>; }; /** * Create a job registry for organizing jobs by feature */ registry: <TRegistry extends Record<string, unknown>>(jobs: TRegistry) => TRegistry; /** * Create a schedule builder */ schedule: ScheduleBuilderFactory<TContext, TMeta>; /** * Create a flow builder */ flow: FlowBuilderFactory<TContext, TMeta>; /** * Create a queue instance that can register and run jobs */ createQueue: (options: { connection: QueueConnection; keyPrefix?: string; createContext: () => TContext | Promise<TContext>; }) => BullMQQueueInstance; };",
+      "jsdocSummary": "Queue builder returned by initQueue Similar to tRPC's initTRPC builder"
+    },
+    {
+      "subpath": "./types",
+      "name": "QueueConfig",
+      "kind": "type",
+      "signature": "export type QueueConfig = { /** * Data transformer for serializing job data * Default: superjson */ transformer?: DataTransformer; /** * Error formatter for standardizing error responses */ errorFormatter?: ErrorFormatter; /** * Whether we're in development mode * Used for additional logging, error details, etc. */ isDev?: boolean; };",
+      "jsdocSummary": "Queue configuration"
+    },
+    {
+      "subpath": "./types",
+      "name": "QueueEnqueue",
+      "kind": "type",
+      "signature": "export type QueueEnqueue = { <TInput, TOutput, TContext>(job: JobDefinition<TInput, TOutput, TContext>, data: TInput, options?: TriggerOptions): Promise<JobTriggerResult>; <TInput>(flow: FlowDefinition<TInput>, input: NoInfer<TInput>): Promise<FlowEnqueueResult | FlowEnqueueFailure>; };",
+      "jsdocSummary": "Add one job to its queue (returns its BullMQ job id), or start one flow (validates `input` with the flow's schema, then adds every step's job)."
+    },
+    {
+      "subpath": "./types",
+      "name": "QueueInstance",
+      "kind": "type",
+      "signature": "export type QueueInstance = { /** * Register a job registry */ register(registry: Record<string, unknown>, options?: RegisterOptions): Promise<void>; /** * Start all registered workers */ start(): Promise<void>; /** * Stop all workers and close connections */ stop(): Promise<void>; };",
+      "jsdocSummary": "Queue instance that can register and run jobs"
+    },
+    {
+      "subpath": "./types",
+      "name": "QueueMeta",
+      "kind": "type",
+      "signature": "export type QueueMeta = Record<string, unknown>;",
+      "jsdocSummary": "Queue metadata type Can be extended by users to add custom metadata"
+    },
+    {
+      "subpath": "./types",
+      "name": "QueuePriority",
+      "kind": "type",
+      "signature": "export type QueuePriority = (typeof QUEUE_PRIORITIES)[keyof typeof QUEUE_PRIORITIES];",
+      "jsdocSummary": ""
+    },
+    {
+      "subpath": "./types",
+      "name": "RegisterOptions",
+      "kind": "type",
+      "signature": "export type RegisterOptions = { /** * The services each top-level branch of the registry runs with, by its key. `queueWorker()` * keys the registry by feature name, so a feature's jobs see its own services as `ctx.services`. */ readonly services?: Readonly<Record<string, object>>; };",
+      "jsdocSummary": "Options of `QueueInstance.register()`."
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleBuilderChain",
+      "kind": "type",
+      "signature": "export type ScheduleBuilderChain<TContext, TContextOut, TMeta extends QueueMeta, TInput, TOutput> = { /** * Set input schema */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): ScheduleBuilderChain<TContext, TContextOut, TMeta, TNewInput, TOutput>; /** * Set handler function (completes the builder) */ handler<TResult>(handler: (data: TInput, ctx: TContextOut) => Promise<TResult>): ScheduleDefinition; };",
+      "jsdocSummary": "Schedule builder chain - after name and input are set"
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleBuilderDef",
+      "kind": "type",
+      "signature": "export type ScheduleBuilderDef<TContext, TContextOut, TMeta extends QueueMeta> = { /** * Add middleware to the inline schedule's handler. A schedule that wraps a * job has no middleware of its own, so the builder this returns has no `.job()`. */ use<TContextOut2>(middleware: JobMiddleware<TContextOut, TContextOut2, TMeta>): ScheduleBuilderWithMiddleware<TContext, TContextOut2, TMeta>; /** * Wrap an existing job: each tick adds `.data()` to the job's own queue. * Any built job fits: its own worker runs it, with its own middleware and context. */ job<TInput>(job: JobDefinition<TInput, unknown, never>): ScheduleJobWrapper<TInput>; /** * Name the schedule (defaults to `<job name>-schedule` for `.job()`; required for an inline handler) */ name(name: string): ScheduleBuilderNamed<TContext, TContextOut, TMeta>; };",
+      "jsdocSummary": "Schedule builder definition"
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleBuilderFactory",
+      "kind": "type",
+      "signature": "export type ScheduleBuilderFactory<TContext, TMeta extends QueueMeta> = { /** * Create a cron-based schedule * Output context is JobContext<TContext> because runtime wraps user context */ cron(pattern: string, options?: { timezone?: string; }): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Create an interval-based schedule (repeating) * Output context is JobContext<TContext> because runtime wraps user context */ interval(milliseconds: number): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Create a timeout-based schedule (one-time execution after delay) * Output context is JobContext<TContext> because runtime wraps user context * * @example * ```typescript * // Send reminder email once after 24 hours * const reminder = q.schedule * .timeout(24 * 60 * 60 * 1000) * .job(sendReminderJob) * .data({ userId: 'usr_123' }); * ``` */ timeout(milliseconds: number): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Every N seconds (requires 6-field cron support in BullMQ) * * @example * ```typescript * q.schedule.everySeconds(5).job(task).data({}) // Every 5 seconds * q.schedule.everySeconds(30).job(task).data({}) // Every 30 seconds * ``` */ everySeconds(n: number): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Every N minutes * * @example * ```typescript * q.schedule.everyMinutes(5).job(task).data({}) // Every 5 minutes * q.schedule.everyMinutes(15).job(task).data({}) // Every 15 minutes * ``` */ everyMinutes(n: number): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Every N hours * * @example * ```typescript * q.schedule.everyHours(2).job(task).data({}) // Every 2 hours * q.schedule.everyHours(6).job(task).data({}) // Every 6 hours * ``` */ everyHours(n: number): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Daily at specified time (HH:mm format) * * @example * ```typescript * q.schedule.daily('09:00').job(task).data({}) // Every day at 9am * q.schedule.daily('14:30', { timezone: 'America/New_York' }).job(task).data({}) // Every day at 2:30pm ET * ``` */ daily(time: string, options?: { timezone?: string; }): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Weekdays (Monday-Friday) at specified time * * @example * ```typescript * q.schedule.weekdays('09:00').job(task).data({}) // Weekdays at 9am * q.schedule.weekdays('17:30').job(task).data({}) // Weekdays at 5:30pm * ``` */ weekdays(time: string, options?: { timezone?: string; }): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Weekends (Saturday-Sunday) at specified time * * @example * ```typescript * q.schedule.weekends('10:00').job(task).data({}) // Weekends at 10am * q.schedule.weekends('14:00').job(task).data({}) // Weekends at 2pm * ``` */ weekends(time: string, options?: { timezone?: string; }): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Weekly on specific day at specified time * * @example * ```typescript * q.schedule.weekly('monday', '09:00').job(task).data({}) // Mondays at 9am * q.schedule.weekly('friday', '17:00').job(task).data({}) // Fridays at 5pm * ``` */ weekly(day: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday', time: string, options?: { timezone?: string; }): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; /** * Monthly on specific day at specified time * * @example * ```typescript * q.schedule.monthly(1, '09:00').job(task).data({}) // First day of month at 9am * q.schedule.monthly(15, '12:00').job(task).data({}) // 15th of month at noon * ``` */ monthly(day: number, time: string, options?: { timezone?: string; }): ScheduleBuilderDef<TContext, JobContext<TContext>, TMeta>; };",
+      "jsdocSummary": "Schedule builder factory"
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleBuilderNamed",
+      "kind": "type",
+      "signature": "export type ScheduleBuilderNamed<TContext, TContextOut, TMeta extends QueueMeta> = { /** * Wrap an existing job under this schedule name */ job<TInput>(job: JobDefinition<TInput, unknown, never>): ScheduleJobWrapper<TInput>; /** * Set input schema (unlocks `.handler()`) */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): ScheduleBuilderChain<TContext, TContextOut, TMeta, TNewInput, never>; };",
+      "jsdocSummary": "Schedule builder after `.name()` with no middleware: wrap a job, or set the input of an inline handler. Has no `.handler()` until `.input()` runs."
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleBuilderNeedsInput",
+      "kind": "type",
+      "signature": "export type ScheduleBuilderNeedsInput<TContext, TContextOut, TMeta extends QueueMeta> = { /** * Set input schema (unlocks `.handler()`) */ input<TNewInput>(schema: StandardSchemaV1<unknown, TNewInput>): ScheduleBuilderChain<TContext, TContextOut, TMeta, TNewInput, never>; };",
+      "jsdocSummary": "Schedule builder after name is set, before input is set. Has no `.handler()`: calling it here is a compile error (\"Call .input() first\")."
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleBuilderWithMiddleware",
+      "kind": "type",
+      "signature": "export type ScheduleBuilderWithMiddleware<TContext, TContextOut, TMeta extends QueueMeta> = { /** * Add more middleware to the inline schedule's handler */ use<TContextOut2>(middleware: JobMiddleware<TContextOut, TContextOut2, TMeta>): ScheduleBuilderWithMiddleware<TContext, TContextOut2, TMeta>; /** * Set name for inline handler */ name(name: string): ScheduleBuilderNeedsInput<TContext, TContextOut, TMeta>; };",
+      "jsdocSummary": "Schedule builder after `.use()`: only an inline handler can follow. Has no `.job()`: wrapping a job here is a compile error (the job's own middleware applies)."
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleDefinition",
+      "kind": "type",
+      "signature": "export type ScheduleDefinition = { _type: 'schedule'; _internal: unknown; };",
+      "jsdocSummary": "Schedule definition (opaque type for now)"
+    },
+    {
+      "subpath": "./types",
+      "name": "ScheduleJobWrapper",
+      "kind": "type",
+      "signature": "export type ScheduleJobWrapper<TInput> = { /** * Set the data to pass to the job */ data(data: TInput): ScheduleDefinition; };",
+      "jsdocSummary": "Schedule job wrapper - for setting data"
+    },
+    {
+      "subpath": "./types",
+      "name": "TriggerOptions",
+      "kind": "type",
+      "signature": "export type TriggerOptions = { /** Job priority (lower number = higher priority) */ priority?: QueuePriority; /** Delay in milliseconds before processing */ delay?: number; /** Custom job ID (defaults to auto-generated) */ jobId?: string; /** Additional BullMQ job options */ bullmqOptions?: Partial<Omit<JobsOptions, 'attempts' | 'backoff'>>; };",
+      "jsdocSummary": "Options for triggering a job"
+    }
+  ],
+  "groups": [],
+  "errorCodes": [
+    "ARKI_QUEUE_E001",
+    "ARKI_QUEUE_E002",
+    "ARKI_QUEUE_E003",
+    "ARKI_QUEUE_E006",
+    "ARKI_QUEUE_E007",
+    "ARKI_QUEUE_E008",
+    "ARKI_QUEUE_E009",
+    "ARKI_QUEUE_E010",
+    "ARKI_QUEUE_E011",
+    "ARKI_QUEUE_E012",
+    "ARKI_QUEUE_E013",
+    "ARKI_QUEUE_E014",
+    "ARKI_QUEUE_E015",
+    "ARKI_QUEUE_E016",
+    "ARKI_QUEUE_E017",
+    "ARKI_QUEUE_E018",
+    "ARKI_QUEUE_E019",
+    "ARKI_QUEUE_E020",
+    "OUTBOX_E001",
+    "OUTBOX_E002",
+    "OUTBOX_E004",
+    "OUTBOX_E005",
+    "OUTBOX_E006",
+    "OUTBOX_E007",
+    "queue.acceptance_unknown",
+    "queue.unavailable",
+    "queue.worker_start_failed"
+  ]
+}
