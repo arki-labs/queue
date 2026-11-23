@@ -1,4 +1,4 @@
-import { context, propagation } from '@opentelemetry/api';
+import { context, propagation, ROOT_CONTEXT } from '@opentelemetry/api';
 import { z } from 'zod';
 const carrierSchema = z.record(z.string().max(128), z.string().max(4096));
 const MAX_TRACE_BYTES = 4096;
@@ -25,8 +25,10 @@ export function extractJobTrace(metadata) {
             return;
         const value = JSON.parse(metadata);
         const carrier = carrierSchema.safeParse(value);
+        // Extracted onto the root, never the active context: a carrier with no trace in it must not
+        // hand back whatever span happens to be active in the worker.
         if (carrier.success)
-            return propagation.extract(context.active(), carrier.data);
+            return propagation.extract(ROOT_CONTEXT, carrier.data);
     }
     catch {
         /* Broken telemetry must never reject a delivery. */

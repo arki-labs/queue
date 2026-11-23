@@ -1,6 +1,6 @@
 {
   "name": "@arki/queue",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Typed background jobs for TypeScript: BullMQ on Redis, pg-boss on PGlite, or a database row that commits with your transaction.",
   "license": "MIT",
   "repository": {
@@ -89,14 +89,14 @@
     "package.json"
   ],
   "dependencies": {
-    "@arki/async": "0.3.0",
-    "@arki/contracts": "0.4.1",
-    "@arki/failure": "0.3.0",
-    "@arki/journal": "0.4.1",
-    "@arki/log": "0.4.0",
-    "@arki/resilience": "0.3.2",
-    "@arki/schedule": "0.1.1",
-    "@arki/schema": "0.3.0",
+    "@arki/async": "0.3.1",
+    "@arki/contracts": "0.4.2",
+    "@arki/failure": "0.4.0",
+    "@arki/journal": "0.5.0",
+    "@arki/log": "0.4.1",
+    "@arki/resilience": "0.3.3",
+    "@arki/schedule": "0.2.0",
+    "@arki/schema": "0.3.1",
     "@bull-board/api": "^6.21.3",
     "@bull-board/hono": "^6.21.3",
     "@electric-sql/pglite": "^0.4.6",
@@ -111,8 +111,8 @@
     "zod": "4.6.5"
   },
   "peerDependencies": {
-    "@arki/admin": "^0.3.0",
-    "@arki/dot": "^0.10.0"
+    "@arki/admin": "^0.3.1",
+    "@arki/dot": "^0.11.0"
   },
   "peerDependenciesMeta": {
     "@arki/admin": {
@@ -127,5 +127,12 @@
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "arki": {
+    "runtimes": [
+      "node",
+      "bun",
+      "deno"
+    ]
   }
 }

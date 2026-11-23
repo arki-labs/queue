@@ -1,4 +1,4 @@
-Read-only mirror of `@arki/queue` v0.3.0. Source and issues: arki-labs/arki. Docs: https://arki.dev/packages/queue. Published 2026-11-02 with provenance https://www.npmjs.com/package/@arki/queue/v/0.3.0#provenance.
+Read-only mirror of `@arki/queue` v0.4.0. Source and issues: arki-labs/arki. Docs: https://arki.dev/packages/queue. Published 2026-11-23 with provenance https://www.npmjs.com/package/@arki/queue/v/0.4.0#provenance.
 
 # @arki/queue
 
@@ -75,6 +75,16 @@ To run the same job on Redis, build the queue with `q.createQueue({ connection: 
 | `@arki/queue/outbox`        | The `@arki/journal` tables in Postgres or PGlite                     |
 
 Debug logs use the `arki:queue` category. Show them with `DEBUG=arki:queue`.
+
+<!-- runtimes:start -->
+| Runtime | Result | Version tested | Date (UTC) |
+| --- | --- | --- | --- |
+| node | pass | v22.13.1 | 2026-11-05 |
+| bun | pass | 1.4.2 | 2026-11-05 |
+| deno | pass | 2.9.8 | 2026-11-05 |
+| browser | n/a | - | 2026-11-05 |
+| hermes | n/a | - | 2026-11-05 |
+<!-- runtimes:end -->
 
 ## Steps and arounds
 
@@ -197,6 +207,22 @@ await finished.promise;
 // The first handler never settles, so a graceful stop would wait for it. Exit instead.
 process.exit(0);
 ```
+
+## Observability
+
+Spans (OpenTelemetry API only, tracer `@arki/queue`; nothing is exported until the app configures an SDK):
+
+| Span | When | Attributes |
+| --- | --- | --- |
+| `queue.enqueue` (producer) | each single-job enqueue: validation, id generation and provider acceptance, an unavailable transport included | `messaging.destination.name` (the declared job name), `failure.code` on failure |
+| `queue.flow.enqueue` (producer) | each flow enqueue: validation, tree mapping and the atomic submission | `messaging.destination.name` (the flow name), `failure.code` on failure |
+| `queue.execute` (consumer) | each worker delivery (BullMQ, pg-boss and outbox runner) | `messaging.destination.name`, `queue.attempt`, `failure.code` on a refusal or failure |
+
+Only a fault (status 500 or higher) sets error status; a 4xx refusal leaves it unset. The producer span's context travels in the message (W3C propagation, so the app must configure a propagator) and `queue.execute` continues it. A message with no producer trace starts a new trace: `queue.execute` is then a root span, never a child of whatever started the worker (in Dot, the `dot.unit.start` span). In a Dot app, a job enqueued by a usecase nests under the `feature.<feature>.<usecase>` span. Job input, results and ids are never recorded. Details: [jobs reference](docs/reference/jobs.md).
+
+Metrics: none. Use your backend's own queue metrics (BullMQ, pg-boss) for depth and latency.
+
+Not instrumented: job and flow builders and cron patterns — pure declarations with no I/O. The Bull Board UI (`createBoard`) — an operator screen whose HTTP requests the host server spans.
 
 ## Limits
 

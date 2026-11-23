@@ -1,6 +1,6 @@
 /** One value-based execution boundary for every queue delivery backend. */
 import type { Span } from '@opentelemetry/api';
-import { context, SpanStatusCode, trace } from '@opentelemetry/api';
+import { context, ROOT_CONTEXT, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 
 import type { AsyncSchemaFailure } from '@arki/failure';
 import { Cancelled, Deadline } from '@arki/async';
@@ -8,6 +8,7 @@ import {
   InvalidInput,
   isAsyncSchemaFailure,
   isFailure,
+  isFault,
   UnexpectedDefect,
   UnexpectedFailure,
   ValidatorDefect,
@@ -34,11 +35,14 @@ function observe(run: () => void): void {
 
 async function withJobSpan<Value>(job: JobLike, run: () => Promise<Value>, metadata?: string): Promise<Value> {
   let span: Span | undefined;
-  const parent = extractJobTrace(metadata);
+  // The producer's trace when the message carries one. Otherwise a new trace: the worker was built by whatever
+  // started it (in Dot, the ended `dot.unit.start` span), and a background job is not part of app startup.
+  const parent = extractJobTrace(metadata) ?? ROOT_CONTEXT;
   observe(() => {
     span = trace.getTracer('@arki/queue').startSpan(
       'queue.execute',
       {
+        kind: SpanKind.CONSUMER,
         attributes: { 'messaging.destination.name': job.name, 'queue.attempt': job.attemptsMade + 1 },
       },
       parent,
@@ -51,7 +55,8 @@ async function withJobSpan<Value>(job: JobLike, run: () => Promise<Value>, metad
       if (isFailure<unknown>(result))
         observe(() => {
           span?.setAttribute('failure.code', result.code);
-          span?.setStatus({ code: SpanStatusCode.ERROR, message: result.code });
+          // An expected outcome (4xx) leaves the status unset; only a fault (5xx) is an error.
+          if (isFault(result)) span?.setStatus({ code: SpanStatusCode.ERROR, message: result.code });
         });
       return result;
     } finally {
@@ -63,7 +68,7 @@ async function withJobSpan<Value>(job: JobLike, run: () => Promise<Value>, metad
   const execute = () => (execution ??= executeOnce());
   if (span === undefined) return execute();
   try {
-    return await context.with(trace.setSpan(parent ?? context.active(), span), execute);
+    return await context.with(trace.setSpan(parent, span), execute);
   } catch {
     return execute();
   }

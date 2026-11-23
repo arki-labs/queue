@@ -1,5 +1,5 @@
 import { context, ROOT_CONTEXT, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
-import { isFailure, UnexpectedDefect } from '@arki/failure';
+import { isFailure, isFault, UnexpectedDefect } from '@arki/failure';
 /** Application telemetry never owns an enqueue outcome. */
 function observe(report) {
     try {
@@ -30,7 +30,9 @@ export async function withEnqueueSpan(run, jobName, spanName = 'queue.enqueue') 
         const result = await execute();
         if (isFailure(result)) {
             observe(() => span?.setAttribute('failure.code', result.code));
-            observe(() => span?.setStatus({ code: SpanStatusCode.ERROR }));
+            // An expected outcome (4xx) leaves the status unset; only a fault (5xx) is an error.
+            if (isFault(result))
+                observe(() => span?.setStatus({ code: SpanStatusCode.ERROR }));
         }
         return result;
     }
